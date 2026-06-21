@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="robots" content="noindex, nofollow">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#111418">
+<title>Cifras</title>
+<style>
+  :root{
+    --bg:#111418; --bg2:#1a1f26; --fg:#e7ebf0; --muted:#8a93a0;
+    --accent:#ffcc55; --chord:#ffcc55; --line:#262d36;
+    --lyric-size:18px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0; padding:0; background:var(--bg); color:var(--fg);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;}
+  /* ---------- LISTA ---------- */
+  #lista{padding:14px 14px 60px;}
+  h1{font-size:22px; margin:8px 4px 14px;}
+  .item{display:flex; align-items:center; gap:10px; padding:14px;
+    background:var(--bg2); border-radius:14px; margin-bottom:8px; cursor:pointer;
+    touch-action:pan-y; user-select:none; -webkit-user-select:none;
+    -webkit-touch-callout:none;}
+  .item:active{background:#222831;}
+  .item-info{flex:1; min-width:0;}
+  .item .t{font-size:17px; font-weight:600; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis;}
+  .item .a{font-size:13px; color:var(--muted);}
+  .item .flag{font-size:16px; flex-shrink:0;}
+  .item .fav{background:none; border:none; font-size:22px; line-height:1;
+    color:#5a6472; padding:4px 2px; flex-shrink:0;}
+  .item .fav.on{color:var(--accent);}
+  .item.arrastando{background:#2c343f; box-shadow:0 10px 28px rgba(0,0,0,.55);
+    transform:scale(1.03); position:relative; z-index:5;}
+  /* ---------- CIFRA ---------- */
+  /* tela da cifra = coluna de altura cheia; só o miolo (.corpo) rola.
+     Evita barra fixa, que no iOS some durante a rolagem com inércia. */
+  #cifra{display:none; flex-direction:column;
+    height:100vh; height:100dvh;}
+  .topo{flex-shrink:0; background:var(--bg);
+    border-bottom:1px solid var(--line); padding:10px 12px;
+    display:flex; align-items:center; gap:10px;}
+  .voltar{background:var(--bg2); border:none; color:var(--fg);
+    font-size:18px; width:42px; height:42px; border-radius:12px;}
+  .titulo{flex:1; min-width:0;}
+  .titulo .t{font-size:17px; font-weight:700; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis;}
+  .titulo .a{font-size:12px; color:var(--muted);}
+  .tom{font-size:13px; color:var(--accent); padding:6px 10px; cursor:pointer;
+    background:var(--bg2); border-radius:8px; white-space:nowrap;}
+  /* seletor de tom (popover) */
+  .tom-overlay{position:fixed; inset:0; z-index:50; display:flex;
+    justify-content:flex-end; align-items:flex-start; padding:60px 12px 0;}
+  .tom-overlay.oculto{display:none;}
+  .tom-card{background:var(--bg2); border:1px solid var(--line);
+    border-radius:16px; padding:12px; width:300px; max-width:92vw;
+    box-shadow:0 16px 40px rgba(0,0,0,.6);}
+  .tp-row{display:flex; gap:8px; margin-bottom:10px;}
+  .tp-row .tp-btn{flex:1; height:48px; border:none; border-radius:12px;
+    background:var(--bg); color:var(--fg); font-size:15px;}
+  .tp-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:8px;
+    margin-bottom:10px;}
+  .tp-note{height:52px; border:none; border-radius:12px; background:var(--bg);
+    color:var(--fg); font-size:17px; font-weight:600;}
+  .tp-note.on{background:var(--accent); color:#111;}
+  .tp-reset{width:100%; height:48px; border:none; border-radius:12px;
+    background:var(--bg); color:var(--muted); font-size:15px;}
+  .tp-btn:active,.tp-note:active,.tp-reset:active{filter:brightness(1.4);}
+  .tom-btn{font-size:17px; height:36px; min-width:44px; border:none;
+    border-radius:8px; background:var(--bg2); color:var(--muted);}
+  .tom-btn.on{background:var(--accent); color:#111;}
+  .corpo{flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch;
+    padding:14px 12px 24px; overscroll-behavior:contain;}
+  /* linhas de cifra: cada palavra carrega o acorde em cima */
+  .linha{display:flex; flex-wrap:wrap; align-items:flex-end;
+    line-height:1.15; margin-bottom:2px; min-height:1.2em;}
+  .pal{display:inline-flex; flex-direction:column; white-space:pre;
+    font-size:var(--lyric-size);}
+  .pal .ac{color:var(--chord); font-weight:700; font-size:.78em;
+    height:1.15em; line-height:1.15em; font-family:ui-monospace,Menlo,monospace;}
+  /* modo só-letra: esconde os acordes (compacta o texto) */
+  .corpo.so-letra .ac{display:none;}
+  .secao-musica{color:var(--accent); font-weight:700; margin:14px 0 4px;
+    font-size:14px; letter-spacing:.05em;}
+  .vazio{color:var(--muted); font-style:italic; padding:30px 6px; line-height:1.6;}
+  .vazio code{background:var(--bg2); padding:2px 6px; border-radius:6px;
+    color:var(--accent); font-style:normal;}
+  /* ---------- BARRA INFERIOR ---------- */
+  .barra{flex-shrink:0; background:var(--bg2);
+    border-top:1px solid var(--line); padding:10px 12px;
+    display:none;
+    padding-bottom:calc(10px + env(safe-area-inset-bottom));}
+  .barra-view{display:flex; gap:8px; align-items:center; width:100%;}
+  .barra-view.oculto{display:none;}
+  /* vista principal: 40% (2 botões) + 60% (botão grande) */
+  #bvMain .lado-esq{display:flex; gap:8px; width:40%;}
+  #bvMain .lado-esq .btn-mini{flex:1;}
+  .btn-grande{width:60%; height:56px; background:var(--accent); color:#111;
+    border:none; border-radius:16px; font-size:30px; font-weight:700;}
+  .btn-grande:active{filter:brightness(.9);}
+  .btn-mini{background:var(--bg2); border:none; color:var(--fg);
+    height:56px; min-width:52px; border-radius:14px; font-size:24px;}
+  .btn-mini:active{background:#2a313b;}
+  .btn{background:var(--bg2); border:none; color:var(--fg);
+    font-size:18px; height:48px; min-width:48px; border-radius:12px; padding:0 12px;}
+  .btn:active{background:#2a313b;}
+  .btn.on{background:var(--accent); color:#111;}
+  .ctrl{display:flex; align-items:center; gap:6px;}
+  .ctrl-lbl{font-size:11px; color:var(--muted); min-width:32px; text-align:center;}
+  .vel-num{font-size:22px; font-weight:700; color:var(--accent);
+    min-width:38px; text-align:center;}
+  .empurra{margin-left:auto;}
+  .btn-salvar{background:var(--accent); color:#111;}
+  /* ---------- HOME: cabeçalho com botão Afinador ---------- */
+  .home-top{display:flex; align-items:center; gap:10px; margin:8px 4px 14px;}
+  .home-top h1{margin:0; flex:1;}
+  .afinador-btn{background:var(--bg2); border:1px solid var(--line); color:var(--fg);
+    font-size:14px; font-weight:600; padding:10px 14px; border-radius:12px;
+    white-space:nowrap;}
+  .afinador-btn:active{background:#2a313b;}
+  /* ---------- TELA AFINADOR ---------- */
+  #afinador{display:none; flex-direction:column; height:100vh; height:100dvh;}
+  .af-corpo{flex:1; display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:18px; padding:20px;}
+  .af-nota{font-size:88px; font-weight:800; line-height:1; color:var(--muted);
+    min-height:96px;}
+  .af-nota.afinado{color:#46d27a;}
+  .af-nota.baixo,.af-nota.alto{color:var(--fg);}
+  .af-hz{font-size:15px; color:var(--muted);}
+  .meter{width:100%; max-width:420px;}
+  .meter-escala{display:flex; justify-content:space-between;
+    font-size:11px; color:var(--muted); margin-bottom:4px;}
+  .meter-trilho{position:relative; height:54px; background:var(--bg2);
+    border-radius:12px; overflow:hidden;}
+  .meter-zero{position:absolute; left:50%; top:6px; bottom:6px; width:2px;
+    margin-left:-1px; background:#46d27a; opacity:.6;}
+  .meter-needle{position:absolute; top:4px; bottom:4px; width:6px; left:50%;
+    margin-left:-3px; border-radius:3px; background:var(--accent);
+    transition:left .07s linear, background .1s;}
+  .meter-needle.afinado{background:#46d27a;}
+  .af-cordas{display:flex; gap:8px; flex-wrap:wrap; justify-content:center;}
+  .af-corda{width:46px; height:46px; border-radius:12px; background:var(--bg2);
+    border:1px solid var(--line); color:var(--fg); font-size:18px; font-weight:700;
+    display:flex; align-items:center; justify-content:center;}
+  .af-corda.ativa{background:var(--accent); color:#111; border-color:var(--accent);}
+  .af-corda.ativa.afinado{background:#46d27a; border-color:#46d27a;}
+  .af-start{background:var(--accent); color:#111; border:none; border-radius:14px;
+    height:54px; padding:0 22px; font-size:17px; font-weight:700;}
+  .af-status{font-size:13px; color:var(--muted); text-align:center; min-height:18px;}
+</style>
+</head>
+<body>
+
+<!-- ============ TELA: LISTA ============ -->
+<div id="lista"></div>
+
+<!-- ============ TELA: CIFRA ============ -->
+<div id="cifra">
+  <div class="topo">
+    <button class="voltar" onclick="voltar()">‹</button>
+    <div class="titulo"><div class="t" id="cTitulo"></div><div class="a" id="cArtista"></div></div>
+    <div class="tom" id="cTom" onclick="toggleTomPop()"></div>
+    <button class="tom-btn on" id="btnLetra" onclick="toggleLetra()" aria-label="Alternar letra/cifra">🎵</button>
+  </div>
+
+  <!-- seletor de tom -->
+  <div class="tom-overlay oculto" id="tomPop" onclick="fecharTomPop()">
+    <div class="tom-card" onclick="event.stopPropagation()">
+      <div class="tp-row">
+        <button class="tp-btn" onclick="transpor(-1);montaTomGrid()">– ½ tom</button>
+        <button class="tp-btn" onclick="transpor(1);montaTomGrid()">+ ½ tom</button>
+      </div>
+      <div class="tp-grid" id="tpGrid"></div>
+      <button class="tp-reset" onclick="restaurarTom()">Restaurar tom inicial</button>
+    </div>
+  </div>
+  <div class="corpo" id="cCorpo"></div>
+
+  <!-- barra de controles (rodapé estático da coluna) -->
+  <div class="barra" id="barra">
+
+  <!-- vista principal -->
+  <div class="barra-view" id="bvMain">
+    <div class="lado-esq">
+      <button class="btn-mini" onclick="abrirPainel('settings')" aria-label="Ajustes">⚙</button>
+      <button class="btn-mini" onclick="abrirPainel('scroll')" aria-label="Rolagem automática">▶</button>
+    </div>
+    <button class="btn-grande" onclick="rolarBaixo()" aria-label="Descer a tela">▼</button>
+  </div>
+
+  <!-- vista: ajustes (tom + fonte) -->
+  <div class="barra-view oculto" id="bvSettings">
+    <button class="btn-mini" onclick="fecharPainel()" aria-label="Voltar">‹</button>
+    <div class="ctrl">
+      <button class="btn" onclick="transpor(-1)">♭</button>
+      <span class="ctrl-lbl">tom</span>
+      <button class="btn" onclick="transpor(1)">♯</button>
+    </div>
+    <div class="ctrl">
+      <button class="btn" onclick="mudaFonte(-1)">A−</button>
+      <span class="ctrl-lbl">fonte</span>
+      <button class="btn" onclick="mudaFonte(1)">A+</button>
+    </div>
+    <button class="btn empurra" onclick="restaurarOriginais()" aria-label="Restaurar tom e fonte">↺</button>
+  </div>
+
+  <!-- vista: rolagem automática -->
+  <div class="barra-view oculto" id="bvScroll">
+    <button class="btn-mini" onclick="fecharPainel()" aria-label="Voltar">‹</button>
+    <button class="btn" onclick="velScroll(-1)">−</button>
+    <span class="vel-num" id="velNum">5</span>
+    <button class="btn" onclick="velScroll(1)">+</button>
+    <button class="btn" id="btnPlay" onclick="toggleScroll()" aria-label="Iniciar/parar">▶</button>
+    <button class="btn btn-salvar empurra" id="btnSalvarVel" onclick="salvarVel()" aria-label="Salvar velocidade">💾</button>
+  </div>
+
+  </div>
+</div>
+
+<!-- ============ TELA: AFINADOR ============ -->
+<div id="afinador">
+  <div class="topo">
+    <button class="voltar" onclick="voltarDoAfinador()">‹</button>
+    <div class="titulo"><div class="t">Afinador</div><div class="a">violão · padrão E A D G B E</div></div>
+  </div>
+  <div class="af-corpo">
+    <div class="af-nota" id="afNota">–</div>
+    <div class="af-hz" id="afHz">&nbsp;</div>
+    <div class="meter">
+      <div class="meter-escala">
+        <span>-50</span><span>0</span><span>+50</span>
+      </div>
+      <div class="meter-trilho">
+        <div class="meter-zero"></div>
+        <div class="meter-needle" id="afNeedle"></div>
+      </div>
+    </div>
+    <div class="af-cordas" id="afCordas"></div>
+    <button class="af-start" id="afStart" onclick="ligarMic()">🎙️ Ativar microfone</button>
+    <div class="af-status" id="afStatus"></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   COMO ADICIONAR / EDITAR UMA MÚSICA
+   ------------------------------------------------------------
+   Cada música é um objeto na lista MUSICAS abaixo:
+     { cat:"int" ou "nac", titulo:"", artista:"", tom:"", cifra:`...` }
+   Na cifra, coloque o acorde ANTES da sílaba, entre colchetes:
+       [G]Parabéns pra [D]você
+   Linhas começando com "#" viram títulos (Intro, Refrão, etc).
+   Linha em branco = espaço. É só isso.
+   ============================================================ */
+const MUSICAS = [
+  /* ---------- INTERNACIONAL ---------- */
+  { cat:"int", titulo:"Stand by Me", artista:"Ben E. King", tom:"G", cifra:`
+#Intro: G  Em  C  D  G
+
+#Primeira parte
+When the [G]night has come
+[Em]And the land is dark
+And the [C]moon is the [D]only light [G]we'll see
+
+#Pré-refrão
+No, I [G]won't be afraid
+No, I [Em]won't be afraid
+Just as [C]long as you [D]stand, stand [G]by me
+
+#Refrão
+And, darling, darling [G]stand by me, oh now now
+[Em]Stand by me
+[C]Stand by me, [D]stand by [G]me
+
+#Segunda parte
+If the [G]sky that we look upon
+[Em]Should tumble and fall
+And the [C]mountains should [D]crumble to the [G]sea
+
+I won't cry, I won't cry
+No, I [Em]won't shed a tear
+Just as [C]long as you [D]stand, stand [G]by me
+
+#Refrão
+And, darling, darling [G]stand by me, oh
+[Em]Stand by me
+[C]Stand by me, [D]stand by [G]me stand by me
+
+#Solo: Em  C  D  G  |  Em  C  D  G
+
+#Refrão final
+Whenever you're in trouble won't you [G]stand by me?
+Oh, now, now, [Em]stand by me
+Oh, [C]stand by me, [D]stand by me, [G]stand by me
+
+Darlin', darlin', stand by me
+[Em]Stand by me
+Oh, [C]stand by me, [D]stand by me, [G]stand by me
+`},
+
+  { cat:"int", titulo:"Take on Me", artista:"a-ha", tom:"G#m", cifra:`
+#Intro
+[C#m] [F#] [B] [E] [B4/D#]
+[C#m] [F#] [B] [E] [B4/D#]
+[C#m] [F#] [G#m] [E]
+
+#Primeira parte
+We're [C#m]talking away [F#]
+[B]I don't know what [E]I'm to [B4/D#]say
+I'll [C#m]say it anyway [F#]
+[B]Today's another [E]day to [B4/D#]find you
+[C#m]Shying away [F#] [G#m]
+I'll be coming for your [E]love, ok
+
+#Refrão
+[B]Take [F#]on [G#m]me [E] [F#]
+[B]Take [F#]me [G#m]on [E] [F#]
+[B]I'll [F#]be [G#m]gone
+[E]In a day or [B]two [F#] [G#m] [E]
+
+#Segunda parte
+[C#m]Needless to [F#]say
+I'm [B]odds and ends
+[E]But I'll [B4/D#]be [C#m]stumbling away [F#]
+[B]Slowly learning that [E]life is [B4/D#]ok
+[C#m]Say after [F#]me
+[G#m]It's no better to be [E]safe than sorry
+
+#Refrão final
+[B]Take [F#]on [G#m]me [E] [F#]
+[B]Take [F#]me [G#m]on [E] [F#]
+[B]I'll [F#]be [G#m]gone
+[E]In a day or [B]two [F#] [G#m]
+[E]In a day or [B]two [F#] [G#m]
+`},
+
+  { cat:"int", titulo:"Knockin' on Heaven's Door", artista:"Bob Dylan", tom:"G", cifra:`
+#Base ( G  D  Am | G  D  C )
+
+[G]Mama take this [D]badge off of [Am]me
+[G]I can't use it [D]anymore [C]
+[G]It's getting dark, too [D]dark to [Am]see
+[G]I feel like I'm [D]knockin' on heaven's [C]door
+
+#Refrão
+[G]Knock-knock-[D]knockin' on heaven's [Am]door
+[G]Knock-knock-[D]knockin' on heaven's [C]door
+`},
+
+  { cat:"int", titulo:"Blackbird", artista:"The Beatles", tom:"G", cifra:`
+#Fingerstyle — estes são os acordes do arranjo (esqueleto harmônico)
+#Intro: G  Am7  G/B  G
+
+[G]Blackbird [Am7]singing in the [G/B]dead of [C]night [C#dim] [D] [D#dim] [Em]
+[Eb]Take these [D]broken [C#]wings and [C]learn to [Cm]fly [G/B] [A7] [D7]
+[G]All your [Am7]life [G/B]
+[G]You were only waiting for this moment to a[C]rise [A7] [D7] [G]
+`},
+
+  { cat:"int", titulo:"Come Together", artista:"The Beatles", tom:"Dm", cifra:`
+#Verso (riff em Dm)
+[Dm]Here come old flat-top, he come grooving up slowly
+[Dm]He got joo-joo eyeball, he one holy roller
+[A7]He got hair down to his knee
+[G7]Got to be a joker, he just do what he [Dm]please
+
+#Refrão
+[Bm]Come to[A]gether [G]right now [A]over [Dm]me
+`},
+
+  { cat:"int", titulo:"Somewhere Only We Know", artista:"Keane", tom:"A", cifra:`
+#Intro: A  E  F#m  D
+
+[A]I walked across an [E]empty land
+[F#m]I knew the pathway like the [D]back of my hand
+[A]I felt the earth be[E]neath my feet
+[F#m]Sat by the river and it [D]made me complete
+
+#Pré-refrão
+[A]Oh simple [E]thing, where [F#m]have you [D]gone?
+[A]I'm getting [E]old and I [F#m]need something to re[D]ly on
+
+#Refrão
+[A]So tell me [E]when you're [F#m]gonna let me [D]in
+[A]I'm getting [E]tired and I [F#m]need somewhere to be[D]gin
+`},
+
+  { cat:"int", titulo:"Wonderwall", artista:"Oasis", tom:"Em", cifra:`
+#Capotraste na 2ª casa
+#Intro: Em7  G  Dsus4  A7sus4
+
+[Em7]Today is [G]gonna be the day
+[Dsus4]That they're gonna throw it back to [A7sus4]you
+[Em7]By now you [G]should've somehow
+[Dsus4]Realized what you gotta [A7sus4]do
+[Em7]I don't believe that [G]anybody
+[Dsus4]Feels the way I [A7sus4]do about you [Cadd9]now [Dsus4] [A7sus4]
+
+#Pré-refrão
+[C]And all the roads we [D]have to walk are [Em]winding
+[C]And all the lights that [D]lead us there are [Em]blinding
+[C]There are many things that [D]I would like to [G]say to you
+But I don't know [Em]how [G]
+
+#Refrão
+Because [Cadd9]maybe [Em7]
+You're gonna be the one that [G]saves me [Em7]
+And [Cadd9]after [Em7]all [G]
+You're my [Cadd9]wonder[Em7]wall [G]
+`},
+
+  { cat:"int", titulo:"Boys Don't Cry", artista:"The Cure", tom:"A", cifra:`
+#Intro: A  G  D
+
+[A]I would say I'm [G]sorry
+[D]If I thought that it would change your [A]mind [G] [D]
+[A]But I know that this [G]time
+[D]I have said too much, been too un[A]kind [G] [D]
+
+#Refrão
+[E]I try to laugh a[G]bout it
+[D]Cover it all up with [A]lies
+[E]I try to laugh a[G]bout it
+[D]Hiding the tears in my [A]eyes
+'Cause [E]boys don't [G]cry [D] [A]
+`},
+
+  /* ---------- NACIONAL ---------- */
+  { cat:"nac", titulo:"Whisky a Go Go", artista:"Roupa Nova", tom:"", cifra:`` },
+  { cat:"nac", titulo:"Fazendinha", artista:"Mundo Bita", tom:"", cifra:`` },
+  { cat:"nac", titulo:"Faz Parte do Meu Show", artista:"Cazuza", tom:"", cifra:`` },
+  { cat:"nac", titulo:"Não Quero Dinheiro", artista:"Tim Maia", tom:"A", cifra:`
+#Intro: A
+#(confira a posição fina das sílabas ao tocar)
+
+#Primeira parte
+[A]Vou pedir pra [F#m]você voltar
+[A]Vou pedir pra [F#m]você ficar
+[E4]Eu te amo, eu te [A]quero [E4]bem
+[A]Vou pedir pra [F#m]você gostar
+[A]Vou pedir pra [F#m]você me amar
+[Dm]Eu te amo, eu te [E4]adoro, meu a[A7]mor
+
+#Refrão
+[D]A semana in[E/D]teira, fiquei espe[A]rando
+[C#m]Pra te ver sorrindo, pra te ver can[F#m]tando
+[Bm]Quando a gente ama, não pensa em di[E4]nheiro
+[A]Só se quer amar, se quer a[A7]mar, se quer amar
+[D]De jeito ma[E/D]neira, não quero dinheiro
+[C#m]Quero amor sincero, isto é o que es[F#m]pero
+[Bm]Grito ao mundo inteiro
+[E4]Não quero di[A]nheiro eu só quero a[E4]mar
+`},
+  { cat:"nac", titulo:"Resposta", artista:"Skank", tom:"", cifra:`` },
+  { cat:"nac", titulo:"Anna Júlia", artista:"Los Hermanos", tom:"", cifra:`` },
+];
+
+/* ===================== LISTA ===================== */
+/* ----- estado da lista: ordem manual + favoritos (persistidos) ----- */
+let ordem=null, favoritos=new Set();
+try{ ordem=JSON.parse(localStorage.getItem('lista_ordem')||'null'); }catch(e){}
+try{ favoritos=new Set(JSON.parse(localStorage.getItem('lista_fav')||'[]')); }catch(e){}
+function salvarOrdem(){ localStorage.setItem('lista_ordem', JSON.stringify(ordem)); }
+function salvarFav(){ localStorage.setItem('lista_fav', JSON.stringify([...favoritos])); }
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+
+function listaOrdenada(){
+  const titulos = MUSICAS.map(m=>m.titulo);
+  if(!Array.isArray(ordem)) ordem = titulos.slice();
+  ordem = ordem.filter(t=>titulos.includes(t));          // tira músicas removidas
+  titulos.forEach(t=>{ if(!ordem.includes(t)) ordem.push(t); }); // acrescenta novas
+  const by={}; MUSICAS.forEach(m=>by[m.titulo]=m);
+  // favoritos sempre no topo, mantendo a ordem dentro de cada grupo (sort estável)
+  const ord = ordem.slice().sort((a,b)=>(favoritos.has(b)?1:0)-(favoritos.has(a)?1:0));
+  return ord.map(t=>by[t]);
+}
+function toggleFav(t){
+  if(favoritos.has(t)) favoritos.delete(t); else favoritos.add(t);
+  salvarFav(); montaLista();
+}
+function abrirPorTitulo(t){
+  const i = MUSICAS.findIndex(m=>m.titulo===t);
+  if(i>=0) abrir(i);
+}
+
+function montaLista(){
+  const el = document.getElementById('lista');
+  let html = `<div class="home-top"><h1>🎸 Minhas Cifras</h1>
+    <button class="afinador-btn" onclick="abrirAfinador()">🎙️ Afinador</button></div>`;
+  listaOrdenada().forEach(m=>{
+    const fav = favoritos.has(m.titulo);
+    const flag = m.cat==='nac' ? '🇧🇷' : '🌎';
+    html += `<div class="item" data-titulo="${esc(m.titulo)}">
+      <div class="item-info"><div class="t">${esc(m.titulo)}</div><div class="a">${esc(m.artista)}</div></div>
+      <span class="flag" title="${m.cat==='nac'?'Nacional':'Internacional'}">${flag}</span>
+      <button class="fav${fav?' on':''}" aria-label="Favoritar">${fav?'★':'☆'}</button>
+    </div>`;
+  });
+  el.innerHTML = html;
+  ativarLista(el);
+}
+
+/* ----- long-press para arrastar e reordenar (toque e mouse) ----- */
+function ativarLista(lista){
+  let alvo=null, lpTimer=null, dragMode=false, y0=0, arrastou=false, reordenou=false;
+  const LONGPRESS=500, CANCEL=10;
+  const ptY = e => e.touches ? e.touches[0].clientY : e.clientY;
+
+  function reordenarPara(y){
+    const itens=[...lista.querySelectorAll('.item:not(.arrastando)')];
+    const depois = itens.find(it=>{ const r=it.getBoundingClientRect(); return y < r.top+r.height/2; }) || null;
+    if(alvo.nextSibling!==depois){ lista.insertBefore(alvo, depois); reordenou=true; }
+  }
+  function onMove(e){
+    const y=ptY(e);
+    if(!dragMode){ if(Math.abs(y-y0)>CANCEL) clearTimeout(lpTimer); return; }
+    e.preventDefault();          // segura o scroll da página durante o arraste
+    reordenarPara(y);
+  }
+  function onUp(){
+    if(alvo) alvo.classList.remove('arrastando');
+    clearTimeout(lpTimer);
+    document.removeEventListener('touchmove', onMove, {passive:false});
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('touchend', onUp);
+    document.removeEventListener('mouseup', onUp);
+    if(reordenou){
+      ordem=[...lista.querySelectorAll('.item')].map(el=>el.dataset.titulo);
+      salvarOrdem(); montaLista();   // normaliza (favoritos no topo)
+    }
+    alvo=null; dragMode=false;
+  }
+  function onDown(e){
+    const it=e.target.closest('.item'); if(!it) return;
+    if(e.target.closest('.fav')) return;            // estrela não inicia arraste
+    alvo=it; y0=ptY(e); dragMode=false; arrastou=false; reordenou=false;
+    lpTimer=setTimeout(()=>{
+      dragMode=true; arrastou=true;
+      it.classList.add('arrastando');
+      if(navigator.vibrate) navigator.vibrate(15);
+    }, LONGPRESS);
+    document.addEventListener('touchmove', onMove, {passive:false});
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('touchend', onUp);
+    document.addEventListener('mouseup', onUp);
+  }
+
+  lista.querySelectorAll('.item').forEach(it=>{
+    it.addEventListener('touchstart', onDown, {passive:true});
+    it.addEventListener('mousedown', onDown);
+    it.addEventListener('click', e=>{
+      if(e.target.closest('.fav')){ toggleFav(it.dataset.titulo); return; }
+      if(arrastou) return;                          // não abrir logo após arrastar
+      abrirPorTitulo(it.dataset.titulo);
+    });
+  });
+}
+
+/* ===================== CIFRA ===================== */
+const SHARP=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const FLAT={'Db':'C#','Eb':'D#','Fb':'E','Gb':'F#','Ab':'G#','Bb':'A#','Cb':'B'};
+let atual=-1, deslocamento=0, fonte=18;
+
+function transChord(ch,n){
+  return ch.split('/').map(parte=>
+    parte.replace(/^([A-G])(b|#)?/, (m,r,a)=>{
+      let nome=r+(a||''); if(FLAT[nome]) nome=FLAT[nome];
+      let i=SHARP.indexOf(nome); if(i<0) return m;
+      return SHARP[(i+n+120)%12];
+    })
+  ).join('/');
+}
+
+/* ----- seletor de tom (popover no chip "Tom:") ----- */
+const PC_GRID=['C','Db','D','Eb','E','F','F#','G','Ab','A','Bb','B']; // grafia exibida
+const GRID_ORDEM=['A','Bb','B','C','Db','D','Eb','E','F','F#','G','Ab']; // ordem da grade
+function pcDe(nome){ const m=(nome||'').match(/^([A-G])(b|#)?/); if(!m) return -1;
+  let n=m[1]+(m[2]||''); if(FLAT[n]) n=FLAT[n]; return SHARP.indexOf(n); }
+function partesTom(tom){ const m=(tom||'').match(/^([A-G](?:b|#)?)(.*)$/); return m?[m[1],m[2]]:['','']; }
+function pcTomAtual(){ const m=MUSICAS[atual]; const [root]=partesTom(m.tom);
+  return ((pcDe(root)+deslocamento)%12+12)%12; }
+
+function nomeTomExibido(){
+  const m=MUSICAS[atual]; if(!m.tom) return '';
+  const [root,suf]=partesTom(m.tom);
+  return deslocamento===0 ? m.tom : (PC_GRID[pcTomAtual()]+suf); // sem transpor = grafia original
+}
+function montaTomGrid(){
+  document.getElementById('cTom').textContent = 'Tom: '+nomeTomExibido();
+  const g=document.getElementById('tpGrid'); const pc=pcTomAtual();
+  g.innerHTML = GRID_ORDEM.map(n=>
+    `<button class="tp-note${pcDe(n)===pc?' on':''}" onclick="escolherTom('${n}')">${n}</button>`
+  ).join('');
+}
+function escolherTom(nome){
+  const [root]=partesTom(MUSICAS[atual].tom);
+  deslocamento=((pcDe(nome)-pcDe(root))%12+12)%12;
+  renderCorpo(); montaTomGrid();
+}
+function restaurarTom(){ deslocamento=0; renderCorpo(); montaTomGrid(); }
+function restaurarOriginais(){ deslocamento=0; fonte=18; renderCorpo(); } // tom + fonte
+function toggleTomPop(){
+  const m=MUSICAS[atual]; if(!m||!m.tom) return;
+  const p=document.getElementById('tomPop');
+  if(p.classList.contains('oculto')){ montaTomGrid(); p.classList.remove('oculto'); }
+  else p.classList.add('oculto');
+}
+function fecharTomPop(){ document.getElementById('tomPop').classList.add('oculto'); }
+
+function renderLinha(linha){
+  if(linha.trim()==='') return '<div class="linha">&nbsp;</div>';
+  if(linha.trim().startsWith('#'))
+    return `<div class="secao-musica">${linha.replace(/^#\s?/,'')}</div>`;
+  // tokeniza em segmentos {acorde, texto}
+  let segs=[], buf='', ch=null, i=0;
+  while(i<linha.length){
+    if(linha[i]==='['){
+      if(buf){segs.push({ch,t:buf}); buf=''; ch=null;}
+      const f=linha.indexOf(']',i); ch=linha.slice(i+1,f); i=f+1;
+    } else { buf+=linha[i]; i++; }
+  }
+  if(buf||ch) segs.push({ch,t:buf});
+  // cada segmento vira palavras (acorde fica na 1ª palavra)
+  let html='';
+  segs.forEach(s=>{
+    const acorde = s.ch!=null ? transChord(s.ch, deslocamento) : '';
+    const partes = s.t.split(/(\s+)/);
+    let primeira=true;
+    for(let k=0; k<partes.length; k++){
+      const p=partes[k];
+      if(p==='') continue;
+      if(/^\s+$/.test(p)){ // espaço solto (ex.: início do segmento)
+        html+=`<span class="pal"><span class="ac"></span>${p}</span>`; continue;
+      }
+      // anexa o espaço seguinte DENTRO da mesma palavra (flex come espaços soltos)
+      let esp='';
+      if(k+1<partes.length && /^\s+$/.test(partes[k+1])){ esp=partes[k+1]; k++; }
+      const ac = (primeira && acorde) ? acorde : '';
+      html+=`<span class="pal"><span class="ac">${ac}</span>${p}${esp}</span>`;
+      primeira=false;
+    }
+    // acorde sem texto depois (ex.: fim de linha)
+    if(acorde && partes.every(p=>/^\s*$/.test(p)))
+      html+=`<span class="pal"><span class="ac">${acorde}</span> </span>`;
+  });
+  return `<div class="linha">${html}</div>`;
+}
+
+function abrir(i){
+  pararScroll(); atual=i; deslocamento=0;
+  const m=MUSICAS[i];
+  document.getElementById('cTitulo').textContent=m.titulo;
+  document.getElementById('cArtista').textContent=m.artista;
+  renderCorpo();
+  document.getElementById('lista').style.display='none';
+  document.getElementById('cifra').style.display='flex';
+  document.getElementById('barra').style.display=m.cifra.trim()?'block':'none';
+  carregarVel(m.titulo);   // velocidade salva desta música (ou padrão)
+  fecharPainel();          // sempre abre na vista principal
+  fecharTomPop();
+  document.getElementById('cCorpo').scrollTop=0;
+}
+function renderCorpo(){
+  const m=MUSICAS[atual];
+  document.getElementById('cTom').textContent =
+    m.tom ? 'Tom: '+nomeTomExibido() : '';
+  const corpo=document.getElementById('cCorpo');
+  if(!m.cifra.trim()){
+    corpo.innerHTML=`<div class="vazio">Cifra ainda não adicionada.<br><br>
+      Abra o arquivo e cole no formato:<br>
+      <code>[G]Parabéns pra [D]você</code></div>`;
+    return;
+  }
+  corpo.innerHTML = m.cifra.replace(/\r/g,'').split('\n').map(renderLinha).join('');
+  corpo.style.setProperty('--lyric-size', fonte+'px');
+}
+function voltar(){
+  pararScroll();
+  document.getElementById('cifra').style.display='none';
+  document.getElementById('barra').style.display='none';
+  document.getElementById('lista').style.display='block';
+}
+function transpor(n){ deslocamento+=n; renderCorpo(); }
+function mudaFonte(n){ fonte=Math.max(12,Math.min(30,fonte+n)); renderCorpo(); }
+function toggleLetra(){
+  const c=document.getElementById('cCorpo');
+  const soLetra=c.classList.toggle('so-letra');   // liga/desliga só-letra
+  document.getElementById('btnLetra').classList.toggle('on', !soLetra); // aceso = com acordes
+}
+
+/* ===================== VISTAS DA BARRA ===================== */
+function abrirPainel(qual){
+  document.getElementById('bvMain').classList.add('oculto');
+  document.getElementById('bvSettings').classList.toggle('oculto', qual!=='settings');
+  document.getElementById('bvScroll').classList.toggle('oculto', qual!=='scroll');
+}
+function fecharPainel(){
+  pararScroll(); // sair da rolagem automática para a rolagem.
+  document.getElementById('bvMain').classList.remove('oculto');
+  document.getElementById('bvSettings').classList.add('oculto');
+  document.getElementById('bvScroll').classList.add('oculto');
+}
+
+/* ===================== BOTÃO GRANDE: DESCER ¾ DA TELA ===================== */
+function rolarBaixo(){
+  const c=document.getElementById('cCorpo');
+  c.scrollBy({ top: Math.round(c.clientHeight*0.75), behavior:'smooth' });
+}
+
+/* ===================== ROLAGEM AUTOMÁTICA ===================== */
+// Níveis em pixels/segundo. Os primeiros são bem mais lentos que o mínimo antigo
+// (que era ~16 px/s). Nível exibido = índice + 1.
+const VEL_PXS = [5, 8, 11, 15, 20, 27, 36, 48, 64, 85, 115, 150];
+let velNivel = 4;        // padrão = nível 5 (20 px/s)
+let rafId=null, lastTs=0, scrollAcc=0;
+
+function mostraVel(){ document.getElementById('velNum').textContent = velNivel+1; }
+function velScroll(n){
+  velNivel = Math.max(0, Math.min(VEL_PXS.length-1, velNivel+n));
+  mostraVel();
+}
+function carregarVel(titulo){
+  const s = localStorage.getItem('vel:'+titulo);
+  velNivel = (s!=null) ? Math.max(0, Math.min(VEL_PXS.length-1, parseInt(s))) : 4;
+  mostraVel();
+}
+function salvarVel(){
+  if(atual<0) return;
+  localStorage.setItem('vel:'+MUSICAS[atual].titulo, velNivel);
+  const b=document.getElementById('btnSalvarVel');
+  b.textContent='✓';
+  setTimeout(()=>{ b.textContent='💾'; }, 900);
+}
+
+function toggleScroll(){ rafId ? pararScroll() : iniciarScroll(); }
+function iniciarScroll(){
+  if(rafId) return;
+  lastTs=0; scrollAcc=0;
+  const b=document.getElementById('btnPlay');
+  b.classList.add('on'); b.textContent='❚❚';
+  const c=document.getElementById('cCorpo');
+  const passo=(ts)=>{
+    if(!lastTs) lastTs=ts;
+    const dt=(ts-lastTs)/1000; lastTs=ts;
+    scrollAcc += VEL_PXS[velNivel]*dt;
+    if(scrollAcc>=1){ const px=Math.floor(scrollAcc); c.scrollTop+=px; scrollAcc-=px; }
+    // parar ao chegar no fim
+    if(c.scrollTop+c.clientHeight >= c.scrollHeight-1){ pararScroll(); return; }
+    rafId=requestAnimationFrame(passo);
+  };
+  rafId=requestAnimationFrame(passo);
+}
+function pararScroll(){
+  if(rafId){ cancelAnimationFrame(rafId); rafId=null; }
+  const b=document.getElementById('btnPlay');
+  if(b){ b.classList.remove('on'); b.textContent='▶'; }
+}
+
+/* ===================== AFINADOR (McLeod Pitch Method) ===================== */
+// Cordas do violão (afinação padrão) — nota MIDI e rótulo.
+const CORDAS=[
+  {midi:40, nome:'E'}, {midi:45, nome:'A'}, {midi:50, nome:'D'},
+  {midi:55, nome:'G'}, {midi:59, nome:'B'}, {midi:64, nome:'e'}
+];
+const NOMES_NOTA=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+let afCtx=null, afAnalyser=null, afStream=null, afBuf=null, afRaf=null, afUltimo=0;
+
+function abrirAfinador(){
+  pararScroll();
+  document.getElementById('lista').style.display='none';
+  document.getElementById('cifra').style.display='none';
+  document.getElementById('afinador').style.display='flex';
+  montaCordas();
+  resetAfinadorUI();
+}
+function voltarDoAfinador(){
+  pararMic();
+  document.getElementById('afinador').style.display='none';
+  document.getElementById('lista').style.display='block';
+}
+function montaCordas(){
+  document.getElementById('afCordas').innerHTML =
+    CORDAS.map((c,i)=>`<div class="af-corda" data-i="${i}">${c.nome}</div>`).join('');
+}
+function resetAfinadorUI(){
+  document.getElementById('afNota').textContent='–';
+  document.getElementById('afNota').className='af-nota';
+  document.getElementById('afHz').innerHTML='&nbsp;';
+  document.getElementById('afNeedle').style.left='50%';
+  document.querySelectorAll('.af-corda').forEach(e=>e.className='af-corda');
+}
+
+async function ligarMic(){
+  const status=document.getElementById('afStatus');
+  if(afStream){ pararMic(); document.getElementById('afStart').textContent='🎙️ Ativar microfone'; status.textContent=''; return; }
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    status.textContent='Microfone indisponível aqui: precisa de HTTPS. No celular funciona quando virar PWA; no Mac, abra via http://localhost:8000.';
+    return;
+  }
+  status.textContent='Pedindo acesso ao microfone…';
+  try{
+    afStream = await navigator.mediaDevices.getUserMedia({audio:{
+      echoCancellation:false, noiseSuppression:false, autoGainControl:false }});
+  }catch(e){
+    status.textContent='Microfone negado. Libere o acesso nos ajustes do navegador.';
+    return;
+  }
+  afCtx = new (window.AudioContext||window.webkitAudioContext)();
+  if(afCtx.state==='suspended') await afCtx.resume();
+  const src = afCtx.createMediaStreamSource(afStream);
+  afAnalyser = afCtx.createAnalyser();
+  afAnalyser.fftSize = 4096;
+  src.connect(afAnalyser);
+  afBuf = new Float32Array(afAnalyser.fftSize);
+  document.getElementById('afStart').textContent='⏹ Parar';
+  status.textContent='Toque uma corda…';
+  loopAfinador();
+}
+function pararMic(){
+  if(afRaf) cancelAnimationFrame(afRaf), afRaf=null;
+  if(afStream){ afStream.getTracks().forEach(t=>t.stop()); afStream=null; }
+  if(afCtx){ afCtx.close(); afCtx=null; }
+  afAnalyser=null;
+  const s=document.getElementById('afStart'); if(s) s.textContent='🎙️ Ativar microfone';
+  resetAfinadorUI();
+}
+
+function loopAfinador(){
+  afRaf=requestAnimationFrame(loopAfinador);
+  const agora=performance.now();
+  if(agora-afUltimo < 70) return;     // ~14 análises/seg
+  afUltimo=agora;
+  afAnalyser.getFloatTimeDomainData(afBuf);
+  const f = detectarFreqMPM(afBuf, afCtx.sampleRate);
+  atualizaAfinador(f);
+}
+
+// McLeod Pitch Method: NSDF + escolha do 1º pico relevante + interpolação parabólica
+function detectarFreqMPM(buf, sr){
+  const N=buf.length;
+  let rms=0; for(let i=0;i<N;i++) rms+=buf[i]*buf[i];
+  if(Math.sqrt(rms/N) < 0.012) return -1;     // gate de silêncio
+  const minLag=Math.max(2, Math.floor(sr/1050));   // até ~1050 Hz
+  const maxLag=Math.min(N-2, Math.floor(sr/60));   // até ~60 Hz (abaixo do Mi grave)
+  const nsdf=new Float32Array(maxLag+1);
+  let maxVal=0;
+  for(let tau=minLag; tau<=maxLag; tau++){
+    let ac=0, m=0;
+    for(let i=0;i<N-tau;i++){ ac+=buf[i]*buf[i+tau]; m+=buf[i]*buf[i]+buf[i+tau]*buf[i+tau]; }
+    const v = m>0 ? 2*ac/m : 0;
+    nsdf[tau]=v; if(v>maxVal) maxVal=v;
+  }
+  if(maxVal < 0.45) return -1;                 // sem periodicidade clara
+  const limite = 0.8*maxVal;                   // 1º pico que passa de 80% do máximo
+  let pico=-1;
+  for(let tau=minLag+1; tau<maxLag; tau++){
+    if(nsdf[tau]>nsdf[tau-1] && nsdf[tau]>=nsdf[tau+1] && nsdf[tau]>limite){ pico=tau; break; }
+  }
+  if(pico<0) return -1;
+  const x1=nsdf[pico-1], x2=nsdf[pico], x3=nsdf[pico+1];
+  const den=(x1-2*x2+x3);
+  const off = den!==0 ? 0.5*(x1-x3)/den : 0;
+  return sr/(pico+off);
+}
+
+function atualizaAfinador(f){
+  const nota=document.getElementById('afNota');
+  const hz=document.getElementById('afHz');
+  const needle=document.getElementById('afNeedle');
+  if(f<=0){ // sem sinal: mantém última leitura esmaecida
+    nota.classList.remove('afinado'); return;
+  }
+  const midi = 69 + 12*Math.log2(f/440);
+  const nn = Math.round(midi);
+  const cents = Math.round((midi-nn)*100);          // -50..+50
+  const nome = NOMES_NOTA[((nn%12)+12)%12];
+  nota.textContent = nome;
+  hz.textContent = f.toFixed(1)+' Hz · '+(cents>0?'+':'')+cents+' ¢';
+  // agulha
+  const pos = Math.max(-50,Math.min(50,cents));
+  needle.style.left = (50+pos)+'%';
+  const afinado = Math.abs(cents)<=5;
+  nota.className = 'af-nota '+(afinado?'afinado':(cents<0?'baixo':'alto'));
+  needle.classList.toggle('afinado', afinado);
+  // destaca a corda do violão correspondente (se for uma delas)
+  document.querySelectorAll('.af-corda').forEach(e=>{
+    const c=CORDAS[+e.dataset.i];
+    const ativa = c.midi===nn;
+    e.classList.toggle('ativa', ativa);
+    e.classList.toggle('afinado', ativa && afinado);
+  });
+}
+
+montaLista();
+</script>
+</body>
+</html>
