@@ -87,6 +87,17 @@ pode ser preenchida/ajustada livremente — o limite é só a **letra completa**
 - **Vazias, aguardando colar:** Whisky a Go Go, Fazendinha, Faz Parte do Meu Show,
   Resposta, Anna Júlia. (Metadados já levantados: ver histórico — tom/capo/intro.)
 
+## Deploy (publicado)
+- **Repo:** github.com/bitnied/violao-cifras (público, branch `main`, `noindex` no HTML).
+- **URL ao vivo (HTTPS):** https://bitnied.github.io/violao-cifras/
+- **REGRA FIXA (decisão do Tiago):** a cada ajuste no app, **atualizar todos os
+  ambientes automaticamente, sem pedir** — ou seja, salvar o arquivo local (já é o
+  iCloud) **e** `git add -A && git commit && git push` para o site no ar. O GitHub
+  Pages reconstrói sozinho em ~1 min.
+- Como é HTTPS, o **afinador (microfone) já funciona no celular** por essa URL.
+- Ainda **não** é PWA: precisa de internet pra abrir. O passo PWA (offline + ícone) segue
+  pendente abaixo.
+
 ## Pendências (não fazer agora — só quando o Tiago pedir)
 - **Virar PWA** (decisão tomada): adicionar `manifest` + service worker para
   funcionar 100% offline em qualquer lugar e tornar os saves duráveis (localStorage
