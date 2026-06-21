@@ -142,6 +142,8 @@
     min-height:96px;}
   .af-nota.afinado{color:#46d27a;}
   .af-nota.baixo,.af-nota.alto{color:var(--fg);}
+  .af-dir{font-size:22px; font-weight:800; min-height:28px; letter-spacing:.02em;}
+  .af-dir.baixo{color:#ffcc55;} .af-dir.alto{color:#ff8b6b;} .af-dir.ok{color:#46d27a;}
   .af-hz{font-size:15px; color:var(--muted);}
   .meter{width:100%; max-width:420px;}
   .meter-escala{display:flex; justify-content:space-between;
@@ -158,8 +160,15 @@
   .af-corda{width:46px; height:46px; border-radius:12px; background:var(--bg2);
     border:1px solid var(--line); color:var(--fg); font-size:18px; font-weight:700;
     display:flex; align-items:center; justify-content:center;}
+  .af-corda{cursor:pointer;}
   .af-corda.ativa{background:var(--accent); color:#111; border-color:var(--accent);}
-  .af-corda.ativa.afinado{background:#46d27a; border-color:#46d27a;}
+  .af-corda.sel{border-color:var(--accent); border-width:2px; color:var(--accent);}
+  .af-corda.sel.ativa{color:#111;}
+  .af-corda.afinado{background:#46d27a; color:#111; border-color:#46d27a;}
+  .af-tuning{display:flex; gap:10px; align-items:center;}
+  .af-tuning button{background:var(--bg2); border:1px solid var(--line); color:var(--fg);
+    height:40px; min-width:48px; border-radius:10px; font-size:15px; font-weight:600;}
+  .af-tuning .lbl{font-size:13px; color:var(--muted); min-width:120px; text-align:center;}
   .af-start{background:var(--accent); color:#111; border:none; border-radius:14px;
     height:54px; padding:0 22px; font-size:17px; font-weight:700;}
   .af-status{font-size:13px; color:var(--muted); text-align:center; min-height:18px;}
@@ -261,10 +270,11 @@
   </div>
   <div class="af-corpo">
     <div class="af-nota" id="afNota">–</div>
+    <div class="af-dir" id="afDir"></div>
     <div class="af-hz" id="afHz">&nbsp;</div>
     <div class="meter">
       <div class="meter-escala">
-        <span>-50</span><span>0</span><span>+50</span>
+        <span>↑ aperte</span><span>0</span><span>afrouxe ↓</span>
       </div>
       <div class="meter-trilho">
         <div class="meter-zero"></div>
@@ -272,6 +282,11 @@
       </div>
     </div>
     <div class="af-cordas" id="afCordas"></div>
+    <div class="af-tuning">
+      <button onclick="mudaAfinacao(-1)">− ½</button>
+      <span class="lbl" id="afTuningLbl">Padrão</span>
+      <button onclick="mudaAfinacao(1)">+ ½</button>
+    </div>
     <button class="af-start" id="afStart" onclick="ligarMic()">🎙️ Ativar microfone</button>
     <div class="af-status" id="afStatus"></div>
   </div>
@@ -2138,6 +2153,19 @@ const CORDAS=[
 ];
 const NOMES_NOTA=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
 let afCtx=null, afAnalyser=null, afStream=null, afBuf=null, afRaf=null, afUltimo=0;
+let afTuning=0;      // afinação: semitons aplicados a todas as cordas (0 = padrão)
+let afCordaSel=-1;   // -1 = automático; 0..5 = corda travada
+let afHold=0;        // timestamp da última detecção válida (segura o display)
+
+function nomeCordaTunada(i){ return NOMES_NOTA[((CORDAS[i].midi+afTuning)%12+12)%12]; }
+function fmtAfinacao(){
+  if(afTuning===0) return 'Padrão (E A D G B E)';
+  const nome6 = NOMES_NOTA[((40+afTuning)%12+12)%12];
+  const n=Math.abs(afTuning);
+  return (afTuning>0?'+':'−')+n+' semitom'+(n>1?'s':'')+' ('+nome6+')';
+}
+function selCorda(i){ afCordaSel = (afCordaSel===i)?-1:i; montaCordas(); }
+function mudaAfinacao(n){ afTuning=Math.max(-12,Math.min(12,afTuning+n)); montaCordas(); }
 
 function abrirAfinador(){
   pararScroll();
@@ -2154,14 +2182,17 @@ function voltarDoAfinador(){
 }
 function montaCordas(){
   document.getElementById('afCordas').innerHTML =
-    CORDAS.map((c,i)=>`<div class="af-corda" data-i="${i}">${c.nome}</div>`).join('');
+    CORDAS.map((c,i)=>`<div class="af-corda${i===afCordaSel?' sel':''}" data-i="${i}" onclick="selCorda(${i})">${nomeCordaTunada(i)}</div>`).join('');
+  document.getElementById('afTuningLbl').textContent = fmtAfinacao();
 }
 function resetAfinadorUI(){
   document.getElementById('afNota').textContent='–';
   document.getElementById('afNota').className='af-nota';
+  document.getElementById('afDir').textContent=''; document.getElementById('afDir').className='af-dir';
   document.getElementById('afHz').innerHTML='&nbsp;';
   document.getElementById('afNeedle').style.left='50%';
-  document.querySelectorAll('.af-corda').forEach(e=>e.className='af-corda');
+  document.getElementById('afNeedle').classList.remove('afinado');
+  document.querySelectorAll('.af-corda').forEach(e=>{ e.classList.remove('ativa','afinado'); });
 }
 
 async function ligarMic(){
@@ -2202,7 +2233,7 @@ function pararMic(){
 function loopAfinador(){
   afRaf=requestAnimationFrame(loopAfinador);
   const agora=performance.now();
-  if(agora-afUltimo < 70) return;     // ~14 análises/seg
+  if(agora-afUltimo < 45) return;     // ~22 análises/seg (mais em tempo real)
   afUltimo=agora;
   afAnalyser.getFloatTimeDomainData(afBuf);
   const f = detectarFreqMPM(afBuf, afCtx.sampleRate);
@@ -2213,9 +2244,9 @@ function loopAfinador(){
 function detectarFreqMPM(buf, sr){
   const N=buf.length;
   let rms=0; for(let i=0;i<N;i++) rms+=buf[i]*buf[i];
-  if(Math.sqrt(rms/N) < 0.012) return -1;     // gate de silêncio
-  const minLag=Math.max(2, Math.floor(sr/1050));   // até ~1050 Hz
-  const maxLag=Math.min(N-2, Math.floor(sr/60));   // até ~60 Hz (abaixo do Mi grave)
+  if(Math.sqrt(rms/N) < 0.006) return -1;     // gate de silêncio (mais sensível)
+  const minLag=Math.max(2, Math.floor(sr/1100));   // até ~1100 Hz
+  const maxLag=Math.min(N-2, Math.floor(sr/55));   // até ~55 Hz (cobre afinações graves)
   const nsdf=new Float32Array(maxLag+1);
   let maxVal=0;
   for(let tau=minLag; tau<=maxLag; tau++){
@@ -2224,7 +2255,7 @@ function detectarFreqMPM(buf, sr){
     const v = m>0 ? 2*ac/m : 0;
     nsdf[tau]=v; if(v>maxVal) maxVal=v;
   }
-  if(maxVal < 0.45) return -1;                 // sem periodicidade clara
+  if(maxVal < 0.38) return -1;                 // sem periodicidade clara
   const limite = 0.8*maxVal;                   // 1º pico que passa de 80% do máximo
   let pico=-1;
   for(let tau=minLag+1; tau<maxLag; tau++){
@@ -2239,29 +2270,43 @@ function detectarFreqMPM(buf, sr){
 
 function atualizaAfinador(f){
   const nota=document.getElementById('afNota');
+  const dir=document.getElementById('afDir');
   const hz=document.getElementById('afHz');
   const needle=document.getElementById('afNeedle');
-  if(f<=0){ // sem sinal: mantém última leitura esmaecida
-    nota.classList.remove('afinado'); return;
-  }
+  const agora=performance.now();
+  if(f>0){ afHold=agora; }
+  else if(agora-afHold > 350){          // sem som por um tempo: zera o display
+    dir.textContent=''; dir.className='af-dir';
+    nota.className='af-nota'; needle.classList.remove('afinado');
+    document.querySelectorAll('.af-corda').forEach(e=>e.classList.remove('ativa','afinado'));
+    return;
+  } else return;                        // dropout curto: segura a última leitura
   const midi = 69 + 12*Math.log2(f/440);
-  const nn = Math.round(midi);
-  const cents = Math.round((midi-nn)*100);          // -50..+50
-  const nome = NOMES_NOTA[((nn%12)+12)%12];
-  nota.textContent = nome;
+  let nn, cents;
+  if(afCordaSel>=0){                     // corda travada: desvio em relação ao alvo dela
+    nn = CORDAS[afCordaSel].midi + afTuning;
+    const alvo = 440*Math.pow(2,(nn-69)/12);
+    cents = 1200*Math.log2(f/alvo);
+    while(cents>600) cents-=1200; while(cents<-600) cents+=1200;  // oitava mais próxima
+  }else{                                 // automático: nota cromática mais próxima
+    nn = Math.round(midi);
+    cents = (midi-nn)*100;
+  }
+  cents = Math.round(cents);
+  nota.textContent = NOMES_NOTA[((nn%12)+12)%12];
   hz.textContent = f.toFixed(1)+' Hz · '+(cents>0?'+':'')+cents+' ¢';
-  // agulha
-  const pos = Math.max(-50,Math.min(50,cents));
-  needle.style.left = (50+pos)+'%';
+  needle.style.left = (50+Math.max(-50,Math.min(50,cents)))+'%';
   const afinado = Math.abs(cents)<=5;
-  nota.className = 'af-nota '+(afinado?'afinado':(cents<0?'baixo':'alto'));
   needle.classList.toggle('afinado', afinado);
-  // destaca a corda do violão correspondente (se for uma delas)
+  if(afinado){ dir.textContent='✓ afinado'; dir.className='af-dir ok'; nota.className='af-nota afinado'; }
+  else if(cents<0){ dir.textContent='↑ aperte'; dir.className='af-dir baixo'; nota.className='af-nota'; }
+  else{ dir.textContent='afrouxe ↓'; dir.className='af-dir alto'; nota.className='af-nota'; }
+  // destaca a corda: travada = a selecionada; automático = a que casa com a nota
   document.querySelectorAll('.af-corda').forEach(e=>{
-    const c=CORDAS[+e.dataset.i];
-    const ativa = c.midi===nn;
-    e.classList.toggle('ativa', ativa);
-    e.classList.toggle('afinado', ativa && afinado);
+    const i=+e.dataset.i;
+    const casa = afCordaSel>=0 ? (i===afCordaSel) : ((CORDAS[i].midi+afTuning)===nn);
+    e.classList.toggle('ativa', casa && afCordaSel<0);
+    e.classList.toggle('afinado', casa && afinado);
   });
 }
 
