@@ -86,6 +86,14 @@
   /* modo só-letra: esconde os acordes e some com as linhas só-de-acordes */
   .corpo.so-letra .ac{display:none;}
   .corpo.so-letra .linha.acordes-only{display:none;}
+  /* botão de modo (Cifra / Letra / Solo) */
+  .modo-btn{font-size:13px; font-weight:700; height:36px; padding:0 12px;
+    min-width:62px; border:none; border-radius:8px; background:var(--bg2); color:var(--fg);}
+  .modo-btn.modo-solo{background:var(--accent); color:#111;}
+  /* tab de solo (monoespaçado, rola na horizontal) */
+  .tab{font-family:ui-monospace,Menlo,monospace; white-space:pre; overflow-x:auto;
+    font-size:13px; line-height:1.4; color:var(--fg); margin:0;
+    -webkit-overflow-scrolling:touch;}
   .secao-musica{color:var(--accent); font-weight:700; margin:9px 0 2px;
     font-size:14px; letter-spacing:.05em;}
   .vazio{color:var(--muted); font-style:italic; padding:30px 6px; line-height:1.6;}
@@ -166,7 +174,7 @@
     <button class="voltar" onclick="voltar()">‹</button>
     <div class="titulo"><div class="t" id="cTitulo"></div><div class="a" id="cArtista"></div></div>
     <div class="tom" id="cTom" onclick="toggleTomPop()"></div>
-    <button class="tom-btn on" id="btnLetra" onclick="toggleLetra()" aria-label="Alternar letra/cifra">🎵</button>
+    <button class="modo-btn" id="btnModo" onclick="ciclarModo()" aria-label="Modo: cifra, letra ou solo">Cifra</button>
   </div>
 
   <!-- seletor de tom -->
@@ -368,6 +376,32 @@ In a [B]day [F#/A#] [G#m] [E]
 #Final
 [B] [F#/A#] [G#m] [E]
 [B] [F#/A#] [G#m] [E] [B]
+`, solos:`
+Solo
+
+   C#m         F#
+E|-4-4---------2--2---2-6-6-7-9-------------|
+B|-----5-2--2-------------------------------|   (2x)
+
+   B               E         E/D#
+E|-7-7-7-2---------4--4----4-2-2-4-2--------|
+B|----------5-------------------------------|
+
+   C#m         F#
+E|-4-4---------2--2---2-6-6-7-9-------------|
+B|-----5-2--2-------------------------------|
+
+   B               E         E/D#
+E|-7-7-7-2---------4--4----4-2-2-4-2--------|
+B|----------5-------------------------------|
+
+   C#m         F#
+E|-4-4---------2--2---2-6-6-7-9-------------|
+B|-----5-2--2-------------------------------|
+
+   C#m             F#
+E|-7-7-7-4---------4--4----4-2-2-2----------|
+B|----------5-------------------------------|
 `},
 
   { cat:"int", titulo:"Knockin' on Heaven's Door", artista:"Bob Dylan", tom:"G", cifra:`
@@ -689,7 +723,7 @@ function abrir(i){
   const m=MUSICAS[i];
   document.getElementById('cTitulo').textContent=m.titulo;
   document.getElementById('cArtista').textContent=m.artista;
-  renderCorpo();
+  aplicaModo();   // aplica modo atual (cifra/letra/solo) + rótulo do botão
   document.getElementById('lista').style.display='none';
   document.getElementById('cifra').style.display='flex';
   document.getElementById('barra').style.display=m.cifra.trim()?'block':'none';
@@ -703,6 +737,13 @@ function renderCorpo(){
   document.getElementById('cTom').textContent =
     m.tom ? 'Tom: '+nomeTomExibido() : '';
   const corpo=document.getElementById('cCorpo');
+  corpo.classList.toggle('so-letra', modo==='letra');
+  if(modo==='solo'){
+    const tab=(m.solos||'').replace(/^\n+|\n+$/g,'');
+    corpo.innerHTML = tab ? `<pre class="tab">${esc(tab)}</pre>`
+      : `<div class="vazio">Sem solo cadastrado para esta música.</div>`;
+    return;
+  }
   if(!m.cifra.trim()){
     corpo.innerHTML=`<div class="vazio">Cifra ainda não adicionada.<br><br>
       Abra o arquivo e cole no formato:<br>
@@ -720,10 +761,16 @@ function voltar(){
 }
 function transpor(n){ deslocamento+=n; renderCorpo(); }
 function mudaFonte(n){ fonte=Math.max(12,Math.min(30,fonte+n)); renderCorpo(); }
-function toggleLetra(){
-  const c=document.getElementById('cCorpo');
-  const soLetra=c.classList.toggle('so-letra');   // liga/desliga só-letra
-  document.getElementById('btnLetra').classList.toggle('on', !soLetra); // aceso = com acordes
+let modo='cifra'; // 'cifra' | 'letra' | 'solo'
+function ciclarModo(){
+  modo = modo==='cifra' ? 'letra' : modo==='letra' ? 'solo' : 'cifra';
+  aplicaModo();
+}
+function aplicaModo(){
+  const b=document.getElementById('btnModo');
+  b.textContent = modo==='cifra'?'Cifra':modo==='letra'?'Letra':'Solo';
+  b.className = 'modo-btn'+(modo==='solo'?' modo-solo':'');
+  renderCorpo();
 }
 
 /* ===================== VISTAS DA BARRA ===================== */
