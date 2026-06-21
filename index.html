@@ -161,6 +161,26 @@
   .af-start{background:var(--accent); color:#111; border:none; border-radius:14px;
     height:54px; padding:0 22px; font-size:17px; font-weight:700;}
   .af-status{font-size:13px; color:var(--muted); text-align:center; min-height:18px;}
+  /* ---------- diagrama de acorde (popover) ---------- */
+  .ac{cursor:pointer;}
+  .acorde-overlay{position:fixed; inset:0; z-index:60; display:flex;
+    align-items:center; justify-content:center; padding:20px;}
+  .acorde-overlay.oculto{display:none;}
+  .acorde-card{background:var(--bg2); border:1px solid var(--line); border-radius:18px;
+    padding:14px 18px 16px; width:230px; max-width:86vw;
+    box-shadow:0 16px 44px rgba(0,0,0,.6); text-align:center;}
+  .acorde-nome{font-size:26px; font-weight:800; color:var(--fg); margin-bottom:2px;}
+  .acorde-svg{display:block; margin:6px auto 12px;}
+  .acorde-var{background:var(--bg); border:1px solid var(--line); color:var(--fg);
+    font-size:14px; height:44px; border-radius:12px; width:100%;}
+  .acorde-var:active{background:#2a313b;}
+  /* ---------- controles de deslocamento do tab (modo Solo) ---------- */
+  .tab-ctrl{display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap;}
+  .tab-ctrl button{background:var(--bg2); border:none; color:var(--fg); height:40px;
+    min-width:40px; border-radius:10px; font-size:16px; padding:0 10px;}
+  .tab-ctrl button:active{background:#2a313b;}
+  .tab-ctrl .salvar{background:var(--accent); color:#111;}
+  .tab-ctrl .lbl{font-size:13px; color:var(--muted); min-width:74px; text-align:center;}
 </style>
 </head>
 <body>
@@ -252,6 +272,15 @@
     <div class="af-cordas" id="afCordas"></div>
     <button class="af-start" id="afStart" onclick="ligarMic()">🎙️ Ativar microfone</button>
     <div class="af-status" id="afStatus"></div>
+  </div>
+</div>
+
+<!-- ============ POPOVER: DIAGRAMA DE ACORDE ============ -->
+<div class="acorde-overlay oculto" id="acPop" onclick="fecharAcorde()">
+  <div class="acorde-card" onclick="event.stopPropagation()">
+    <div class="acorde-nome" id="acNome"></div>
+    <div id="acDiagrama"></div>
+    <button class="acorde-var" id="acVar" onclick="variarAcorde()">variar acorde</button>
   </div>
 </div>
 
@@ -738,8 +767,9 @@ function abrir(i){
   document.getElementById('cifra').style.display='flex';
   document.getElementById('barra').style.display=m.cifra.trim()?'block':'none';
   carregarVel(m.titulo);   // velocidade salva desta música (ou padrão)
+  carregarTabOffset(m.titulo);
   fecharPainel();          // sempre abre na vista principal
-  fecharTomPop();
+  fecharTomPop(); fecharAcorde();
   document.getElementById('cCorpo').scrollTop=0;
 }
 function renderCorpo(){
@@ -749,9 +779,19 @@ function renderCorpo(){
   const corpo=document.getElementById('cCorpo');
   corpo.classList.toggle('so-letra', modo==='letra');
   if(modo==='solo'){
-    const tab=(m.solos||'').replace(/^\n+|\n+$/g,'');
-    corpo.innerHTML = tab ? `<pre class="tab">${esc(tab)}</pre>`
-      : `<div class="vazio">Sem solo cadastrado para esta música.</div>`;
+    const bruto=(m.solos||'').replace(/^\n+|\n+$/g,'');
+    if(!bruto){ corpo.innerHTML=`<div class="vazio">Sem solo cadastrado para esta música.</div>`; return; }
+    const tab = tabOffset ? deslocaTab(bruto, tabOffset) : bruto;
+    const sinal = tabOffset>0?'+'+tabOffset:tabOffset;
+    corpo.innerHTML =
+      `<div class="tab-ctrl">
+         <button onclick="shiftTab(-1)">−</button>
+         <span class="lbl">casas ${sinal}</span>
+         <button onclick="shiftTab(1)">+</button>
+         <button class="salvar" onclick="salvarTab()" id="btnSalvarTab">💾</button>
+         <button onclick="resetTab()">↺</button>
+       </div>
+       <pre class="tab">${esc(tab)}</pre>`;
     return;
   }
   if(!m.cifra.trim()){
@@ -781,6 +821,40 @@ function aplicaModo(){
   b.textContent = modo==='cifra'?'Cifra':modo==='letra'?'Letra':'Solo';
   b.className = 'modo-btn'+(modo==='solo'?' modo-solo':'');
   renderCorpo();
+}
+
+/* ----- deslocamento das casas do tab (modo Solo), por música ----- */
+let tabOffset=0;
+// soma 'off' a cada número de casa que esteja em contexto de tab (após | ou -),
+// compensando os tracinhos pra manter o alinhamento. Não toca em "(2x)" etc.
+function deslocaTab(texto, off){
+  return texto.split('\n').map(linha=>{
+    const i1=linha.indexOf('|'); if(i1<0) return linha;   // não é linha de tab
+    const i2=linha.lastIndexOf('|');
+    const ini=linha.slice(0,i1+1);
+    const fim=i2>i1?linha.slice(i2):'';                   // inclui "| (2x)" etc.
+    const meio=linha.slice(i1+1, i2>i1?i2:linha.length)
+      .replace(/(\d+)(-*)/g, (m,num,tracos)=>{            // desloca cada casa
+        let v=parseInt(num)+off; if(v<0) v=0;
+        const s=String(v);
+        let pad=tracos.length + (num.length - s.length);  // compensa o alinhamento
+        if(pad<0) pad=0;
+        return s + '-'.repeat(pad);
+      });
+    return ini + meio + fim;
+  }).join('\n');
+}
+function carregarTabOffset(titulo){
+  const s=localStorage.getItem('tab:'+titulo);
+  tabOffset = s!=null ? parseInt(s) : 0;
+}
+function shiftTab(n){ tabOffset+=n; renderCorpo(); }
+function resetTab(){ tabOffset=0; renderCorpo(); }
+function salvarTab(){
+  if(atual<0) return;
+  localStorage.setItem('tab:'+MUSICAS[atual].titulo, tabOffset);
+  const b=document.getElementById('btnSalvarTab');
+  if(b){ b.textContent='✓'; setTimeout(()=>{ b.textContent='💾'; }, 900); }
 }
 
 /* ===================== VISTAS DA BARRA ===================== */
@@ -985,6 +1059,88 @@ function atualizaAfinador(f){
     e.classList.toggle('afinado', ativa && afinado);
   });
 }
+
+/* ===================== DIAGRAMA DE ACORDE ===================== */
+// Formas móveis (pestana). Cada string low→high (Mi6,Lá5,Ré4,Sol3,Si2,mi1).
+// 0 = casa da pestana (raiz), 'x' = abafada. Vira acorde aberto quando a raiz é casa 0.
+const FORMAS = {
+  '':    { E:[0,2,2,1,0,0], A:['x',0,2,2,2,0] },   // maior
+  'm':   { E:[0,2,2,0,0,0], A:['x',0,2,2,1,0] },   // menor
+  '7':   { E:[0,2,0,1,0,0], A:['x',0,2,0,2,0] },
+  'm7':  { E:[0,2,0,0,0,0], A:['x',0,2,0,1,0] },
+  'maj7':{ E:[0,2,1,1,0,0], A:['x',0,2,1,2,0] },
+  'sus4':{ E:[0,2,2,2,0,0], A:['x',0,2,2,3,0] },
+  'sus2':{ A:['x',0,2,2,0,0] },
+  '6':   { E:[0,2,2,1,2,0], A:['x',0,2,2,2,2] },
+  'dim': { A:['x',0,1,2,1,'x'] }
+};
+function fretRaiz(pc, ref){ const aberto = ref==='E'?4:9; return ((pc-aberto)%12+12)%12; }
+function qualidadeDe(suf){
+  suf=(suf||'').trim();
+  if(suf==='') return '';
+  if(/^(maj7|7M|M7|7\+|\+)/.test(suf)) return 'maj7';
+  if(/^m(?!aj)/.test(suf)) return /7/.test(suf) ? 'm7' : 'm';
+  if(/^7/.test(suf)) return /sus4|4/.test(suf) ? 'sus4' : '7';
+  if(/^(sus4|4)/.test(suf)) return 'sus4';
+  if(/^(sus2|2)/.test(suf)) return 'sus2';
+  if(/^6/.test(suf)) return '6';
+  if(/^(dim|°|o)/.test(suf)) return 'dim';
+  return ''; // 9, add9, etc. caem na tríade maior
+}
+function parseAcorde(nome){
+  const m=(nome||'').match(/^([A-G](?:b|#)?)(.*)$/); if(!m) return null;
+  let suf=m[2], bass=null; const sl=suf.indexOf('/');
+  if(sl>=0){ bass=suf.slice(sl+1); suf=suf.slice(0,sl); }
+  return {root:m[1], suf, bass, pc:pcDe(m[1])};
+}
+function voicingsDe(nome){
+  const p=parseAcorde(nome); if(!p||p.pc<0) return [];
+  const formas=FORMAS[qualidadeDe(p.suf)]||FORMAS[''];
+  const out=[];
+  ['E','A'].forEach(ref=>{
+    const shape=formas[ref]; if(!shape) return;
+    const barre=fretRaiz(p.pc, ref);
+    out.push(shape.map(o=> o==='x'?null : barre+o));
+  });
+  return out;
+}
+function svgAcorde(frets){
+  const W=140,H=168,L=20,R=14,T=30,B=16, nS=6,nF=5;
+  const gw=W-L-R, gh=H-T-B, sx=gw/(nS-1), fy=gh/nF;
+  const pos=frets.filter(f=>f>0);
+  const startFret = (!pos.length || Math.max(...pos)<=4) ? 1 : Math.min(...pos);
+  let s='';
+  for(let i=0;i<=nF;i++){ const y=T+i*fy;
+    s+=`<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="#7d8794" stroke-width="${(i===0&&startFret===1)?3:1}"/>`; }
+  for(let i=0;i<nS;i++){ const x=L+i*sx;
+    s+=`<line x1="${x}" y1="${T}" x2="${x}" y2="${H-B}" stroke="#7d8794" stroke-width="1"/>`; }
+  if(startFret>1) s+=`<text x="${L-7}" y="${T+fy*0.72}" fill="#8a93a0" font-size="12" text-anchor="end">${startFret}fr</text>`;
+  frets.forEach((f,i)=>{ const x=L+i*sx;
+    if(f===null){ s+=`<text x="${x}" y="${T-9}" fill="#8a93a0" font-size="14" text-anchor="middle">×</text>`; }
+    else if(f===0){ s+=`<circle cx="${x}" cy="${T-13}" r="4.5" fill="none" stroke="#e7ebf0" stroke-width="1.5"/>`; }
+    else { const y=T+((f-startFret)+0.5)*fy; s+=`<circle cx="${x}" cy="${y}" r="6.5" fill="#ffcc55"/>`; }
+  });
+  return `<svg class="acorde-svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${s}</svg>`;
+}
+let acVoicings=[], acIndex=0;
+function abrirAcorde(nome){
+  acVoicings=voicingsDe(nome); acIndex=0;
+  if(!acVoicings.length) return;
+  document.getElementById('acNome').textContent=nome;
+  document.getElementById('acVar').style.display = acVoicings.length>1?'block':'none';
+  renderAcordeDiagrama();
+  document.getElementById('acPop').classList.remove('oculto');
+}
+function renderAcordeDiagrama(){
+  document.getElementById('acDiagrama').innerHTML = svgAcorde(acVoicings[acIndex]);
+}
+function variarAcorde(){ acIndex=(acIndex+1)%acVoicings.length; renderAcordeDiagrama(); }
+function fecharAcorde(){ document.getElementById('acPop').classList.add('oculto'); }
+// clique em qualquer acorde (.ac) abre o diagrama
+document.getElementById('cCorpo').addEventListener('click', e=>{
+  const ac=e.target.closest('.ac'); if(!ac) return;
+  const nome=ac.textContent.trim(); if(nome) abrirAcorde(nome);
+});
 
 montaLista();
 </script>
