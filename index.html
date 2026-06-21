@@ -77,12 +77,14 @@
     padding:14px 12px 24px; overscroll-behavior:contain;}
   /* linhas de cifra: cada palavra carrega o acorde em cima */
   .linha{display:flex; flex-wrap:wrap; align-items:flex-end;
-    line-height:1.12; margin-bottom:1px; min-height:1.15em;}
-  .linha.vazia{min-height:0; height:9px; font-size:0;}   /* respiro curto */
+    line-height:1.15; margin-bottom:5px; min-height:1.15em;}
+  .linha.vazia{min-height:0; height:8px; font-size:0; margin-bottom:0;} /* respiro curto */
   .pal{display:inline-flex; flex-direction:column; white-space:pre;
     font-size:var(--lyric-size);}
   .pal .ac{color:var(--chord); font-weight:700; font-size:.78em;
-    height:1.15em; line-height:1.15em; font-family:ui-monospace,Menlo,monospace;}
+    height:1.3em; line-height:1.3em; font-family:ui-monospace,Menlo,monospace;
+    padding-right:8px;}                 /* gap pra acordes não colarem entre si */
+  .pal .ac:empty{padding-right:0;}      /* slot vazio não alarga o texto */
   /* modo só-letra: esconde os acordes e some com as linhas só-de-acordes */
   .corpo.so-letra .ac{display:none;}
   .corpo.so-letra .linha.acordes-only{display:none;}
@@ -94,7 +96,7 @@
   .tab{font-family:ui-monospace,Menlo,monospace; white-space:pre; overflow-x:auto;
     font-size:13px; line-height:1.4; color:var(--fg); margin:0;
     -webkit-overflow-scrolling:touch;}
-  .secao-musica{color:var(--accent); font-weight:700; margin:9px 0 2px;
+  .secao-musica{color:var(--accent); font-weight:700; margin:14px 0 7px;
     font-size:14px; letter-spacing:.05em;}
   .vazio{color:var(--muted); font-style:italic; padding:30px 6px; line-height:1.6;}
   .vazio code{background:var(--bg2); padding:2px 6px; border-radius:6px;
@@ -739,7 +741,7 @@ function renderLinha(linha){
       const p=partes[k];
       if(p==='') continue;
       if(/^\s+$/.test(p)){ // espaço solto (ex.: início do segmento)
-        html+=`<span class="pal"><span class="ac"></span>${p}</span>`; continue;
+        html+=`<span class="pal"><span class="ac"></span>${p.replace(/ /g,'&nbsp;')}</span>`; continue;
       }
       // anexa o espaço seguinte DENTRO da mesma palavra (flex come espaços soltos)
       let esp='';
@@ -750,7 +752,7 @@ function renderLinha(linha){
     }
     // acorde sem texto depois (ex.: fim de linha)
     if(acorde && partes.every(p=>/^\s*$/.test(p)))
-      html+=`<span class="pal"><span class="ac">${acorde}</span> </span>`;
+      html+=`<span class="pal"><span class="ac">${acorde}</span>&nbsp;</span>`;
   });
   // linha só-de-acordes (instrumental): sem texto fora dos colchetes
   const soAcordes = linha.replace(/\[[^\]]*\]/g,'').trim()==='';
