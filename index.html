@@ -137,7 +137,7 @@
   /* ---------- TELA AFINADOR ---------- */
   #afinador{display:none; flex-direction:column; height:100vh; height:100dvh;}
   .af-corpo{flex:1; display:flex; flex-direction:column; align-items:center;
-    justify-content:center; gap:18px; padding:20px;}
+    justify-content:safe center; gap:16px; padding:20px; overflow-y:auto;}
   .af-nota{font-size:88px; font-weight:800; line-height:1; color:var(--muted);
     min-height:96px;}
   .af-nota.afinado{color:#46d27a;}
@@ -169,6 +169,21 @@
   .af-tuning button{background:var(--bg2); border:1px solid var(--line); color:var(--fg);
     height:40px; min-width:48px; border-radius:10px; font-size:15px; font-weight:600;}
   .af-tuning .lbl{font-size:13px; color:var(--muted); min-width:120px; text-align:center;}
+  .af-cfg-btn{background:none; border:1px solid var(--line); color:var(--muted);
+    font-size:13px; height:34px; padding:0 14px; border-radius:10px;}
+  .af-ajustes{width:100%; max-width:360px; background:var(--bg2);
+    border:1px solid var(--line); border-radius:14px; padding:12px 14px;
+    display:flex; flex-direction:column; gap:10px;}
+  .af-ajustes.oculto{display:none;}
+  .aj-row{display:flex; align-items:center; gap:8px; font-size:14px;}
+  .aj-row > span:first-child{flex:1; color:var(--fg);}
+  .aj-row button{background:var(--bg); border:none; color:var(--fg); width:38px;
+    height:38px; border-radius:10px; font-size:18px;}
+  .aj-val{min-width:54px; text-align:center; color:var(--accent); font-weight:700;}
+  .aj-acoes{display:flex; gap:8px; margin-top:2px;}
+  .aj-acoes button{flex:1; height:42px; border:none; border-radius:10px;
+    background:var(--bg); color:var(--fg); font-size:14px;}
+  .aj-acoes .aj-salvar{background:var(--accent); color:#111; font-weight:700;}
   .af-start{background:var(--accent); color:#111; border:none; border-radius:14px;
     height:54px; padding:0 22px; font-size:17px; font-weight:700;}
   .af-status{font-size:13px; color:var(--muted); text-align:center; min-height:18px;}
@@ -286,6 +301,19 @@
       <button onclick="mudaAfinacao(-1)">− ½</button>
       <span class="lbl" id="afTuningLbl">Padrão</span>
       <button onclick="mudaAfinacao(1)">+ ½</button>
+    </div>
+    <button class="af-cfg-btn" onclick="toggleAjustesAf()">⚙ ajustes</button>
+    <div class="af-ajustes oculto" id="afAjustes">
+      <div class="aj-row"><span>Tolerância</span>
+        <button onclick="mudaTol(-1)">−</button><span class="aj-val" id="ajTol">±5 ¢</span><button onclick="mudaTol(1)">+</button></div>
+      <div class="aj-row"><span>Sensibilidade</span>
+        <button onclick="mudaSens(-1)">−</button><span class="aj-val" id="ajSens">3</span><button onclick="mudaSens(1)">+</button></div>
+      <div class="aj-row"><span>Resposta</span>
+        <button onclick="mudaResp(-1)">−</button><span class="aj-val" id="ajResp">3</span><button onclick="mudaResp(1)">+</button></div>
+      <div class="aj-acoes">
+        <button class="aj-salvar" id="ajSalvar" onclick="salvarAjustesAf()">💾 Salvar</button>
+        <button onclick="restaurarAjustesAf()">↺ Padrão</button>
+      </div>
     </div>
     <button class="af-start" id="afStart" onclick="ligarMic()">🎙️ Ativar microfone</button>
     <div class="af-status" id="afStatus"></div>
@@ -2156,6 +2184,32 @@ let afCtx=null, afAnalyser=null, afStream=null, afBuf=null, afRaf=null, afUltimo
 let afTuning=0;      // afinação: semitons aplicados a todas as cordas (0 = padrão)
 let afCordaSel=-1;   // -1 = automático; 0..5 = corda travada
 let afHold=0;        // timestamp da última detecção válida (segura o display)
+// ajustes editáveis (com save)
+let afTol=5, afSens=3, afResp=3;   // tolerância(¢), sensibilidade(1-5), resposta(1-5)
+function afGate(){ return [0.012,0.009,0.006,0.004,0.0025][afSens-1]; }   // gate de silêncio
+function afClareza(){ return [0.50,0.45,0.38,0.33,0.28][afSens-1]; }      // limiar NSDF
+function afThrottleMs(){ return [90,65,45,32,22][afResp-1]; }             // ms entre análises
+const clampN=(v,a,b)=>Math.max(a,Math.min(b,v));
+function montaAjustesAf(){
+  document.getElementById('ajTol').textContent='±'+afTol+' ¢';
+  document.getElementById('ajSens').textContent=afSens;
+  document.getElementById('ajResp').textContent=afResp;
+}
+function mudaTol(n){ afTol=clampN(afTol+n,1,20); montaAjustesAf(); }
+function mudaSens(n){ afSens=clampN(afSens+n,1,5); montaAjustesAf(); }
+function mudaResp(n){ afResp=clampN(afResp+n,1,5); montaAjustesAf(); }
+function toggleAjustesAf(){ document.getElementById('afAjustes').classList.toggle('oculto'); }
+function carregarAjustesAf(){
+  try{ const s=JSON.parse(localStorage.getItem('afinador_cfg')||'null');
+    if(s){ afTol=s.tol??5; afSens=s.sens??3; afResp=s.resp??3; } }catch(e){}
+  montaAjustesAf();
+}
+function salvarAjustesAf(){
+  localStorage.setItem('afinador_cfg', JSON.stringify({tol:afTol,sens:afSens,resp:afResp}));
+  const b=document.getElementById('ajSalvar'); b.textContent='✓ Salvo';
+  setTimeout(()=>{ b.textContent='💾 Salvar'; }, 1000);
+}
+function restaurarAjustesAf(){ afTol=5; afSens=3; afResp=3; montaAjustesAf(); }
 
 function nomeCordaTunada(i){ return NOMES_NOTA[((CORDAS[i].midi+afTuning)%12+12)%12]; }
 function fmtAfinacao(){
@@ -2172,6 +2226,7 @@ function abrirAfinador(){
   document.getElementById('lista').style.display='none';
   document.getElementById('cifra').style.display='none';
   document.getElementById('afinador').style.display='flex';
+  carregarAjustesAf();
   montaCordas();
   resetAfinadorUI();
 }
@@ -2233,7 +2288,7 @@ function pararMic(){
 function loopAfinador(){
   afRaf=requestAnimationFrame(loopAfinador);
   const agora=performance.now();
-  if(agora-afUltimo < 45) return;     // ~22 análises/seg (mais em tempo real)
+  if(agora-afUltimo < afThrottleMs()) return;   // intervalo ajustável (Resposta)
   afUltimo=agora;
   afAnalyser.getFloatTimeDomainData(afBuf);
   const f = detectarFreqMPM(afBuf, afCtx.sampleRate);
@@ -2244,7 +2299,7 @@ function loopAfinador(){
 function detectarFreqMPM(buf, sr){
   const N=buf.length;
   let rms=0; for(let i=0;i<N;i++) rms+=buf[i]*buf[i];
-  if(Math.sqrt(rms/N) < 0.006) return -1;     // gate de silêncio (mais sensível)
+  if(Math.sqrt(rms/N) < afGate()) return -1;  // gate de silêncio (ajustável)
   const minLag=Math.max(2, Math.floor(sr/1100));   // até ~1100 Hz
   const maxLag=Math.min(N-2, Math.floor(sr/55));   // até ~55 Hz (cobre afinações graves)
   const nsdf=new Float32Array(maxLag+1);
@@ -2255,7 +2310,7 @@ function detectarFreqMPM(buf, sr){
     const v = m>0 ? 2*ac/m : 0;
     nsdf[tau]=v; if(v>maxVal) maxVal=v;
   }
-  if(maxVal < 0.38) return -1;                 // sem periodicidade clara
+  if(maxVal < afClareza()) return -1;          // sem periodicidade clara (ajustável)
   const limite = 0.8*maxVal;                   // 1º pico que passa de 80% do máximo
   let pico=-1;
   for(let tau=minLag+1; tau<maxLag; tau++){
@@ -2296,7 +2351,7 @@ function atualizaAfinador(f){
   nota.textContent = NOMES_NOTA[((nn%12)+12)%12];
   hz.textContent = f.toFixed(1)+' Hz · '+(cents>0?'+':'')+cents+' ¢';
   needle.style.left = (50+Math.max(-50,Math.min(50,cents)))+'%';
-  const afinado = Math.abs(cents)<=5;
+  const afinado = Math.abs(cents)<=afTol;
   needle.classList.toggle('afinado', afinado);
   if(afinado){ dir.textContent='✓ afinado'; dir.className='af-dir ok'; nota.className='af-nota afinado'; }
   else if(cents<0){ dir.textContent='↑ aperte'; dir.className='af-dir baixo'; nota.className='af-nota'; }
