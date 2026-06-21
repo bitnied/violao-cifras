@@ -80,12 +80,15 @@ A parte **musical** (acordes, tom, capotraste, intro, progressões, estrutura)
 pode ser preenchida/ajustada livremente — o limite é só a **letra completa**.
 
 ## Estado atual das músicas
-- **Completas:** Stand by Me, Take on Me (simplificada, Tom G#m), Knockin' on
-  Heaven's Door, Não Quero Dinheiro.
-- **Só amostra (1 verso + refrão), aguardando o Tiago colar o resto:** Blackbird,
-  Come Together, Somewhere Only We Know, Wonderwall, Boys Don't Cry.
-- **Vazias, aguardando colar:** Whisky a Go Go, Fazendinha, Faz Parte do Meu Show,
-  Resposta, Anna Júlia. (Metadados já levantados: ver histórico — tom/capo/intro.)
+**Todas completas** (21 músicas). Internacionais (14): Stand by Me, Take on Me,
+Knockin' on Heaven's Door, Blackbird, Come Together, Somewhere Only We Know,
+Wonderwall, Boys Don't Cry, Sweet Dreams, See You, About a Girl, Too Much,
+Don't Be Cruel, The Way You Make Me Feel. Nacionais (7): Whisky a Go Go,
+Fazendinha, Faz Parte do Meu Show, Não Quero Dinheiro, Azul da Cor do Mar,
+Resposta, Anna Júlia.
+- *Too Much:* artista (Spandau Ballet) por dedução — confirmar com o Tiago.
+- Músicas de fingerstyle/tab (Blackbird, See You, About a Girl etc.): letra no
+  Cifra, tablatura no modo Solo.
 
 ## Deploy (publicado)
 - **Repo:** github.com/bitnied/violao-cifras (público, branch `main`, `noindex` no HTML).
