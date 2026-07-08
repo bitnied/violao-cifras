@@ -77,8 +77,8 @@
     padding:14px 12px 24px; overscroll-behavior:contain;}
   /* linhas de cifra: cada palavra carrega o acorde em cima */
   .linha{display:flex; flex-wrap:wrap; align-items:flex-end;
-    line-height:1.15; margin-bottom:5px; min-height:1.15em;}
-  .linha.vazia{min-height:0; height:8px; font-size:0; margin-bottom:0;} /* respiro curto */
+    line-height:1.3; margin-bottom:9px; min-height:1.15em; row-gap:7px;}
+  .linha.vazia{min-height:0; height:18px; font-size:0; margin-bottom:0; row-gap:0;} /* separação entre blocos */
   .pal{display:inline-flex; flex-direction:column; white-space:pre;
     font-size:var(--lyric-size);}
   .pal .ac{color:var(--chord); font-weight:700; font-size:.78em;
@@ -96,8 +96,9 @@
   .tab{font-family:ui-monospace,Menlo,monospace; white-space:pre; overflow-x:auto;
     font-size:13px; line-height:1.4; color:var(--fg); margin:0;
     -webkit-overflow-scrolling:touch;}
-  .secao-musica{color:var(--accent); font-weight:700; margin:14px 0 7px;
+  .secao-musica{color:var(--accent); font-weight:700; margin:26px 0 9px;
     font-size:14px; letter-spacing:.05em;}
+  .secao-musica:first-child{margin-top:4px;}
   .vazio{color:var(--muted); font-style:italic; padding:30px 6px; line-height:1.6;}
   .vazio code{background:var(--bg2); padding:2px 6px; border-radius:6px;
     color:var(--accent); font-style:normal;}
