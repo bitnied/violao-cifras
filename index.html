@@ -1371,47 +1371,46 @@ A|---5---5--9--------------5---5--9-------------------|
 E|----------------------------------------------------|
 `},
 
-  { cat:"int", titulo:"The Way You Make Me Feel", artista:"Michael Jackson", tom:"A", cifra:`
+  { cat:"int", titulo:"The Way You Make Me Feel", artista:"Michael Jackson", tom:"E", cifra:`
 #Intro
-[A] [G/A] [A] [G/A] [A] [G/A]
-[A] [Bm/A]
+[E] [D2] [E] [D2] [E] [D2]
 
 #Primeira parte
-[A]Hey pretty [G/A]baby with the high [A]heels on [G/A]
-[A]You give me [G/A]fever like Ive never, [A]ever known [G/A]
-[Dm]Youre just a [D/C]product of loveliness [D] [D/C]
-[D]I like the [D/C]groove of your walk, [D]your talk, your [C/D]dress
+[E]Hey pretty [D2]baby with the high [E]heels on [D2]
+[E]You give me [D2]fever like Ive never, [E]ever known [D2]
+[A]Youre just a [G]product of loveliness [A] [G]
+[A]I like the [G]groove of your walk, [A]your talk, your [G/A]dress
 
 #Pré-refrão
-[D]I feel your [C/D]fever
-From [D]miles a[C/D]round
-[Dm]Ill pick you up in my [C/D]car and well [D]paint the [E]town
-[A]Just kiss me [G/A]baby and tell me [A]twice [Bm/A]
-[A]That youre the [G/A]one for [A]me [Bm/A]
+[A]I feel your [G/A]fever
+From [A]miles a[G/A]round
+[A]Ill pick you up in my [G/A]car and well [A]paint the [B]town
+[E]Just kiss me [D2]baby and tell me [E]twice [D2]
+[E]That youre the [D2]one for [E]me [D2]
 
 #Refrão
-The way you make me [A]feel [G/A] [A]
-You really [Bm/A]turn me [A]on [G/A] [A]
-You [Bm/A]knock me off of my [A]feet [G/A] [A]
-My [Bm/A]lonely days are [A]gone [G/A] [A] [Bm/A]
+The way you make me [E]feel [D2] [E]
+You really [D2]turn me [E]on [D2] [E]
+You [D2]knock me off of my [E]feet [D2] [E]
+My [D2]lonely days are [E]gone [D2] [E] [D2]
 
 #Segunda parte
-[A]I like the [G/A]feelin you're givin [A]me [Bm/A]
-[A]Just hold me [G/A]baby and im in ec[A]stasy [Bm/A]
-[A]Oh Ill be [G/A]workin from nine to [A]five [Bm/A]
-[A]To buy you [G/A]things to keep you by my [Bm/A]side
+[E]I like the [D2]feelin you're givin [E]me [D2]
+[E]Just hold me [D2]baby and im in ec[E]stasy [D2]
+[E]Oh Ill be [D2]workin from nine to [E]five [D2]
+[E]To buy you [D2]things to keep you by my [D2]side
 
 #Pré-refrão
-[D]I never [C/D]felt so in [D]love be[C/D]fore
-[D]Just promise [C/D]baby, youll [D]love me forever[E]more
-[A]I swear Im [G/A]keepin you satis[A]fied [Bm/A]
-[A]Cause youre the [G/A]one for [A]me
+[A]I never [G/A]felt so in [A]love be[G/A]fore
+[A]Just promise [G/A]baby, youll [A]love me forever[B]more
+[E]I swear Im [D2]keepin you satis[E]fied [D2]
+[E]Cause youre the [D2]one for [E]me
 
 #Refrão
-The way you make me [A]feel [G/A] [A]
-You really [Bm/A]turn me [A]on [G/A] [A]
-You [Bm/A]knock me off of my [A]feet [G/A] [A]
-My [Bm/A]lonely days are [A]gone [G/A] [A] [Bm/A]
+The way you make me [E]feel [D2] [E]
+You really [D2]turn me [E]on [D2] [E]
+You [D2]knock me off of my [E]feet [D2] [E]
+My [D2]lonely days are [E]gone [D2] [E] [D2]
 `},
 
   { cat:"int", titulo:"Patience", artista:"Guns N' Roses", tom:"C", cifra:`
@@ -2546,16 +2545,43 @@ function parseAcorde(nome){
   }
   return {root:m[1], suf, bass, pc:pcDe(m[1])};
 }
+// formas ABERTAS preferidas (mostradas primeiro no diagrama). low→high (Mi6..mi1)
+const ABERTOS = {
+  'C':    [[null,3,2,0,1,0]],
+  'Cmaj7':[[null,3,2,0,0,0]],
+  'C7':   [[null,3,2,3,1,0]],
+  'D':    [[null,null,0,2,3,2]],
+  'D2':   [[null,null,0,2,3,0]],   // Dsus2 — 1ª corda solta
+  'Dsus2':[[null,null,0,2,3,0]],
+  'Dsus4':[[null,null,0,2,3,3]],
+  'D4':   [[null,null,0,2,3,3]],
+  'Dm':   [[null,null,0,2,3,1]],
+  'D7':   [[null,null,0,2,1,2]],
+  'E':    [[0,2,2,1,0,0]],
+  'Em':   [[0,2,2,0,0,0]],
+  'E7':   [[0,2,0,1,0,0]],
+  'Em7':  [[0,2,0,0,0,0]],
+  'G':    [[3,2,0,0,0,3]],         // Sol aberto
+  'G7':   [[3,2,0,0,0,1]],
+  'A':    [[null,0,2,2,2,0]],
+  'Am':   [[null,0,2,2,1,0]],
+  'A7':   [[null,0,2,0,2,0]],
+  'Am7':  [[null,0,2,0,1,0]],
+  'B':    [[null,2,4,4,4,2]],      // pestana da 2ª casa (print)
+  'B7':   [[null,2,1,2,0,2]]
+};
 function voicingsDe(nome){
   const p=parseAcorde(nome); if(!p||p.pc<0) return [];
+  let out=[];
+  if(ABERTOS[nome]) out.push(...ABERTOS[nome]);   // aberto preferido primeiro
   const formas=FORMAS[qualidadeDe(p.suf)]||FORMAS[''];
-  const out=[];
   ['E','A'].forEach(ref=>{
     const shape=formas[ref]; if(!shape) return;
     const barre=fretRaiz(p.pc, ref);
     out.push(shape.map(o=> o==='x'?null : barre+o));
   });
-  return out;
+  const vis=new Set();                            // remove voicings repetidos
+  return out.filter(v=>{ const k=JSON.stringify(v); if(vis.has(k)) return false; vis.add(k); return true; });
 }
 function svgAcorde(frets){
   const W=140,H=168,L=20,R=14,T=30,B=16, nS=6,nF=5;
