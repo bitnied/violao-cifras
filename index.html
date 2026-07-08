@@ -201,6 +201,9 @@
   .acorde-var{background:var(--bg); border:1px solid var(--line); color:var(--fg);
     font-size:14px; height:44px; border-radius:12px; width:100%;}
   .acorde-var:active{background:#2a313b;}
+  .acorde-som{background:var(--accent); color:#111; font-weight:700; border:none;
+    margin-bottom:8px;}
+  .acorde-som:active{filter:brightness(.9); background:var(--accent);}
   /* ---------- controles de deslocamento do tab (modo Solo) ---------- */
   .tab-ctrl{display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap;}
   .tab-ctrl button{background:var(--bg2); border:none; color:var(--fg); height:40px;
@@ -326,6 +329,7 @@
   <div class="acorde-card" onclick="event.stopPropagation()">
     <div class="acorde-nome" id="acNome"></div>
     <div id="acDiagrama"></div>
+    <button class="acorde-var acorde-som" id="acOuvir" onclick="ouvirAcorde()">🔊 ouvir</button>
     <button class="acorde-var" id="acVar" onclick="variarAcorde()">variar acorde</button>
   </div>
 </div>
@@ -2506,15 +2510,17 @@ function atualizaAfinador(f){
 // Formas móveis (pestana). Cada string low→high (Mi6,Lá5,Ré4,Sol3,Si2,mi1).
 // 0 = casa da pestana (raiz), 'x' = abafada. Vira acorde aberto quando a raiz é casa 0.
 const FORMAS = {
-  '':    { E:[0,2,2,1,0,0], A:['x',0,2,2,2,0] },   // maior
-  'm':   { E:[0,2,2,0,0,0], A:['x',0,2,2,1,0] },   // menor
-  '7':   { E:[0,2,0,1,0,0], A:['x',0,2,0,2,0] },
-  'm7':  { E:[0,2,0,0,0,0], A:['x',0,2,0,1,0] },
-  'maj7':{ E:[0,2,1,1,0,0], A:['x',0,2,1,2,0] },
-  'sus4':{ E:[0,2,2,2,0,0], A:['x',0,2,2,3,0] },
-  'sus2':{ A:['x',0,2,2,0,0] },
-  '6':   { E:[0,2,2,1,2,0], A:['x',0,2,2,2,2] },
-  'dim': { A:['x',0,1,2,1,'x'] }
+  '':      { E:[0,2,2,1,0,0], A:['x',0,2,2,2,0] },   // maior
+  'm':     { E:[0,2,2,0,0,0], A:['x',0,2,2,1,0] },   // menor
+  '7':     { E:[0,2,0,1,0,0], A:['x',0,2,0,2,0] },
+  'm7':    { E:[0,2,0,0,0,0], A:['x',0,2,0,1,0] },
+  'maj7':  { E:[0,2,1,1,0,0], A:['x',0,2,1,2,0] },
+  'sus4':  { E:[0,2,2,2,0,0], A:['x',0,2,2,3,0] },
+  '7sus4': { E:[0,2,0,2,0,0], A:['x',0,2,0,3,0] },   // 7(4)
+  '7(4/9)':{ A:['x',0,0,0,0,0] },                    // 9sus4: pestana inteira (ex.: E7(4/9)=x77777)
+  'sus2':  { A:['x',0,2,2,0,0] },
+  '6':     { E:[0,2,2,1,2,0], A:['x',0,2,2,2,2] },
+  'dim':   { A:['x',0,1,2,1,'x'] }
 };
 function fretRaiz(pc, ref){ const aberto = ref==='E'?4:9; return ((pc-aberto)%12+12)%12; }
 function qualidadeDe(suf){
@@ -2522,8 +2528,10 @@ function qualidadeDe(suf){
   if(suf==='') return '';
   if(/^(maj7|7M|M7|7\+|\+)/.test(suf)) return 'maj7';
   if(/^m(?!aj)/.test(suf)) return /7/.test(suf) ? 'm7' : 'm';
-  if(/^7/.test(suf)) return /sus4|4/.test(suf) ? 'sus4' : '7';
-  if(/^(sus4|4)/.test(suf)) return 'sus4';
+  if(/^7.*4.*9|^9sus4|^7\(4\/9\)/.test(suf)) return '7(4/9)';   // 7(4/9), 9sus4
+  if(/^7.*(sus4|\(4\)|4)/.test(suf)) return '7sus4';            // 7(4), 7sus4
+  if(/^7/.test(suf)) return '7';
+  if(/^(sus4|4)/.test(suf)) return 'sus4';                      // 4, 4(9)
   if(/^(sus2|2)/.test(suf)) return 'sus2';
   if(/^6/.test(suf)) return '6';
   if(/^(dim|°|o)/.test(suf)) return 'dim';
@@ -2532,7 +2540,10 @@ function qualidadeDe(suf){
 function parseAcorde(nome){
   const m=(nome||'').match(/^([A-G](?:b|#)?)(.*)$/); if(!m) return null;
   let suf=m[2], bass=null; const sl=suf.indexOf('/');
-  if(sl>=0){ bass=suf.slice(sl+1); suf=suf.slice(0,sl); }
+  // só é baixo invertido se depois da "/" vier uma NOTA (evita quebrar 7(4/9))
+  if(sl>=0 && /^[A-G](b|#)?$/.test(suf.slice(sl+1))){
+    bass=suf.slice(sl+1); suf=suf.slice(0,sl);
+  }
   return {root:m[1], suf, bass, pc:pcDe(m[1])};
 }
 function voicingsDe(nome){
@@ -2556,10 +2567,26 @@ function svgAcorde(frets){
     s+=`<line x1="${L}" y1="${y}" x2="${W-R}" y2="${y}" stroke="#7d8794" stroke-width="${(i===0&&startFret===1)?3:1}"/>`; }
   for(let i=0;i<nS;i++){ const x=L+i*sx;
     s+=`<line x1="${x}" y1="${T}" x2="${x}" y2="${H-B}" stroke="#7d8794" stroke-width="1"/>`; }
-  if(startFret>1) s+=`<text x="${L-7}" y="${T+fy*0.72}" fill="#8a93a0" font-size="12" text-anchor="end">${startFret}fr</text>`;
+  if(startFret>1) s+=`<text x="${L-7}" y="${T+fy*0.72}" fill="#8a93a0" font-size="12" text-anchor="end">${startFret}ª</text>`;
+  // pestana: menor casa positiva cobrindo da 1ª à última corda tocada (span >= 4)
+  let barreF=-1, bIni=-1, bFim=-1;
+  if(pos.length){
+    const f=Math.min(...pos);
+    const tocadas=frets.map((v,i)=>v>0?i:-1).filter(i=>i>=0);
+    const comF=frets.map((v,i)=>v===f?i:-1).filter(i=>i>=0);
+    const lo=Math.min(...tocadas), hi=Math.max(...tocadas);
+    if(comF.length>=2 && comF.includes(lo) && comF.includes(hi) && (hi-lo+1)>=4){
+      barreF=f; bIni=lo; bFim=hi;
+    }
+  }
+  if(barreF>0){
+    const y=T+((barreF-startFret)+0.5)*fy;
+    s+=`<rect x="${L+bIni*sx-7}" y="${y-6.5}" width="${(bFim-bIni)*sx+14}" height="13" rx="6.5" fill="#ffcc55"/>`;
+  }
   frets.forEach((f,i)=>{ const x=L+i*sx;
     if(f===null){ s+=`<text x="${x}" y="${T-9}" fill="#8a93a0" font-size="14" text-anchor="middle">×</text>`; }
     else if(f===0){ s+=`<circle cx="${x}" cy="${T-13}" r="4.5" fill="none" stroke="#e7ebf0" stroke-width="1.5"/>`; }
+    else if(f===barreF && i>=bIni && i<=bFim){ /* coberto pela pestana */ }
     else { const y=T+((f-startFret)+0.5)*fy; s+=`<circle cx="${x}" cy="${y}" r="6.5" fill="#ffcc55"/>`; }
   });
   return `<svg class="acorde-svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${s}</svg>`;
@@ -2578,6 +2605,32 @@ function renderAcordeDiagrama(){
 }
 function variarAcorde(){ acIndex=(acIndex+1)%acVoicings.length; renderAcordeDiagrama(); }
 function fecharAcorde(){ document.getElementById('acPop').classList.add('oculto'); }
+
+/* ----- tocar o acorde (síntese Web Audio, dedilhado) ----- */
+const AFINACAO_MIDI=[40,45,50,55,59,64]; // E A D G B e
+let somCtx=null;
+function ouvirAcorde(){
+  const v=acVoicings[acIndex]; if(!v) return;
+  if(!somCtx) somCtx=new (window.AudioContext||window.webkitAudioContext)();
+  if(somCtx.state==='suspended') somCtx.resume();
+  const t0=somCtx.currentTime+0.03;
+  const notas=v.map((f,i)=>f===null?null:AFINACAO_MIDI[i]+f).filter(n=>n!==null);
+  notas.forEach((midi,k)=>{
+    const freq=440*Math.pow(2,(midi-69)/12);
+    const t=t0+k*0.055;                      // dedilhado (strum)
+    const osc=somCtx.createOscillator(); osc.type='triangle'; osc.frequency.value=freq;
+    const osc2=somCtx.createOscillator(); osc2.type='sine'; osc2.frequency.value=freq*2;
+    const g=somCtx.createGain(), g2=somCtx.createGain();
+    const lp=somCtx.createBiquadFilter(); lp.type='lowpass';
+    lp.frequency.setValueAtTime(3200,t); lp.frequency.exponentialRampToValueAtTime(900,t+1.4);
+    g.gain.setValueAtTime(0.0001,t);  g.gain.exponentialRampToValueAtTime(0.16,t+0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+1.6);
+    g2.gain.setValueAtTime(0.0001,t); g2.gain.exponentialRampToValueAtTime(0.05,t+0.008);
+    g2.gain.exponentialRampToValueAtTime(0.0001,t+0.9);
+    osc.connect(g).connect(lp); osc2.connect(g2).connect(lp); lp.connect(somCtx.destination);
+    osc.start(t); osc.stop(t+1.7); osc2.start(t); osc2.stop(t+1.0);
+  });
+}
 // clique em qualquer acorde (.ac) abre o diagrama
 document.getElementById('cCorpo').addEventListener('click', e=>{
   const ac=e.target.closest('.ac'); if(!ac) return;
