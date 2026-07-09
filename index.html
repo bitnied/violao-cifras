@@ -2454,13 +2454,25 @@ function resetAfinadorUI(){
   document.querySelectorAll('.af-corda').forEach(e=>{ e.classList.remove('ativa','afinado'); });
 }
 
+let afWake=null, afMorto=0, afReligando=false;
+async function pedirWakeLock(){ try{ if(navigator.wakeLock) afWake=await navigator.wakeLock.request('screen'); }catch(e){} }
+function soltarWakeLock(){ try{ if(afWake) afWake.release(); }catch(e){} afWake=null; }
+
 async function ligarMic(){
   const status=document.getElementById('afStatus');
-  if(afStream){ pararMic(); document.getElementById('afStart').textContent='🎙️ Ativar microfone'; status.textContent=''; return; }
+  if(afStream){ pararMic(); status.textContent=''; return; }
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-    status.textContent='Microfone indisponível aqui: precisa de HTTPS. No celular funciona quando virar PWA; no Mac, abra via http://localhost:8000.';
+    status.textContent='Microfone indisponível aqui: precisa de HTTPS (use a URL do site). No Mac: http://localhost:8000.';
     return;
   }
+  // iOS: criar/resumir o AudioContext AINDA DENTRO do gesto do toque,
+  // antes de qualquer await — senão o contexto pode ficar mudo (suspended).
+  if(!afCtx || afCtx.state==='closed'){
+    afCtx = new (window.AudioContext||window.webkitAudioContext)();
+    afCtx.onstatechange = ()=>{ if(afStream && afCtx && afCtx.state!=='running') afCtx.resume().catch(()=>{}); };
+  }
+  afCtx.resume().catch(()=>{});
+  try{ if(navigator.audioSession) navigator.audioSession.type='play-and-record'; }catch(e){}
   status.textContent='Pedindo acesso ao microfone…';
   try{
     afStream = await navigator.mediaDevices.getUserMedia({audio:{
@@ -2469,13 +2481,17 @@ async function ligarMic(){
     status.textContent='Microfone negado. Libere o acesso nos ajustes do navegador.';
     return;
   }
-  afCtx = new (window.AudioContext||window.webkitAudioContext)();
-  if(afCtx.state==='suspended') await afCtx.resume();
+  if(afCtx.state!=='running'){ try{ await afCtx.resume(); }catch(e){} }
+  // iOS pode derrubar a track sozinho (ligação, Siri, troca de app) → religa
+  const track=afStream.getAudioTracks()[0];
+  if(track) track.onended = ()=>{ if(afStream) religarMic('Microfone caiu — reativando…'); };
   const src = afCtx.createMediaStreamSource(afStream);
   afAnalyser = afCtx.createAnalyser();
   afAnalyser.fftSize = 4096;
   src.connect(afAnalyser);
   afBuf = new Float32Array(afAnalyser.fftSize);
+  afMorto=0;
+  pedirWakeLock();                       // mantém a tela acesa enquanto afina
   document.getElementById('afStart').textContent='⏹ Parar';
   status.textContent='Toque uma corda…';
   loopAfinador();
@@ -2483,11 +2499,27 @@ async function ligarMic(){
 function pararMic(){
   if(afRaf) cancelAnimationFrame(afRaf), afRaf=null;
   if(afStream){ afStream.getTracks().forEach(t=>t.stop()); afStream=null; }
-  if(afCtx){ afCtx.close(); afCtx=null; }
+  if(afCtx && afCtx.state==='running') afCtx.suspend().catch(()=>{}); // reusa o contexto (iOS limita/buga ao recriar)
   afAnalyser=null;
+  soltarWakeLock();
   const s=document.getElementById('afStart'); if(s) s.textContent='🎙️ Ativar microfone';
   resetAfinadorUI();
 }
+async function religarMic(msg){
+  if(afReligando) return;
+  afReligando=true;
+  const status=document.getElementById('afStatus');
+  if(msg) status.textContent=msg;
+  try{
+    if(afRaf){ cancelAnimationFrame(afRaf); afRaf=null; }
+    if(afStream){ afStream.getTracks().forEach(t=>t.stop()); afStream=null; }
+    await ligarMic();
+  } finally { afReligando=false; }
+}
+// ao voltar pro app/aba, o iOS deixa o áudio suspenso — retoma
+document.addEventListener('visibilitychange', ()=>{
+  if(!document.hidden && afStream && afCtx && afCtx.state!=='running') afCtx.resume().catch(()=>{});
+});
 
 function loopAfinador(){
   afRaf=requestAnimationFrame(loopAfinador);
@@ -2495,13 +2527,27 @@ function loopAfinador(){
   if(agora-afUltimo < afThrottleMs()) return;   // intervalo ajustável (Resposta)
   afUltimo=agora;
   afAnalyser.getFloatTimeDomainData(afBuf);
+  // watchdog: zeros ABSOLUTOS = pipeline morto no iOS (sala silenciosa ainda
+  // tem ruído de fundo). Se ficar morto por >2,5s, religa sozinho.
+  let pico=0;
+  for(let i=0;i<afBuf.length;i+=64){ const v=Math.abs(afBuf[i]); if(v>pico) pico=v; }
+  if(pico < 1e-7){
+    if(!afMorto) afMorto=agora;
+    else if(agora-afMorto>2500){ afMorto=0; religarMic('Sem sinal do microfone — reativando…'); return; }
+  } else afMorto=0;
   const f = detectarFreqMPM(afBuf, afCtx.sampleRate);
   atualizaAfinador(f);
 }
 
 // McLeod Pitch Method: NSDF + escolha do 1º pico relevante + interpolação parabólica
-function detectarFreqMPM(buf, sr){
-  const N=buf.length;
+// Decimação 2× (média de pares = filtro simples): 4× menos CPU no celular,
+// e a faixa útil (até ~1,1 kHz) continua coberta com folga.
+let afBufDec=null;
+function detectarFreqMPM(bruto, srBruto){
+  const N=bruto.length>>1, sr=srBruto/2;
+  if(!afBufDec || afBufDec.length!==N) afBufDec=new Float32Array(N);
+  const buf=afBufDec;
+  for(let i=0;i<N;i++) buf[i]=(bruto[2*i]+bruto[2*i+1])*0.5;
   let rms=0; for(let i=0;i<N;i++) rms+=buf[i]*buf[i];
   if(Math.sqrt(rms/N) < afGate()) return -1;  // gate de silêncio (ajustável)
   const minLag=Math.max(2, Math.floor(sr/1100));   // até ~1100 Hz
