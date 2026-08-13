@@ -229,6 +229,18 @@
     50%{box-shadow:0 0 0 14px rgba(229,57,53,0);}}
   .grav-rec-timer{font-size:32px; font-weight:700; min-width:80px;
     font-variant-numeric:tabular-nums;}
+  .grav-meter-wrap{width:100%; max-width:340px; margin:0 auto 8px; padding:0 16px;}
+  .grav-meter{height:16px; background:var(--bg2); border-radius:8px; overflow:hidden;
+    border:1px solid var(--line);}
+  .grav-meter-bar{height:100%; border-radius:7px; width:0;
+    background:linear-gradient(90deg,#46d27a 0%,#46d27a 55%,#ffcc55 75%,#ef5350 100%);
+    transition:width .06s linear;}
+  .grav-meter-lbl{font-size:11px; color:var(--muted); text-align:center; margin-top:5px;
+    font-variant-numeric:tabular-nums;}
+  .grav-mic-btn{display:block; margin:4px auto 16px; background:var(--accent); color:#111;
+    border:none; border-radius:14px; height:46px; padding:0 20px; font-size:15px; font-weight:700;}
+  .grav-mic-btn:active{filter:brightness(.9);}
+  .grav-mic-btn.oculto{display:none;}
   .grav-sec{font-size:13px; color:var(--muted); margin:4px 0 10px 2px;
     font-weight:600; letter-spacing:.04em;}
   .grav-vazio{color:var(--muted); font-style:italic; font-size:14px; padding:16px 4px;}
@@ -395,6 +407,11 @@
       <button class="grav-rec-btn" id="gravRecBtn" onclick="toggleGravacao()">⏺</button>
       <span class="grav-rec-timer" id="gravTimer">0:00</span>
     </div>
+    <div class="grav-meter-wrap">
+      <div class="grav-meter"><div class="grav-meter-bar" id="gravMeter"></div></div>
+      <div class="grav-meter-lbl" id="gravMeterLbl">mic desligado</div>
+    </div>
+    <button class="grav-mic-btn" id="gravMicBtn" onclick="gravAtivarMic()">🎙 Ativar microfone</button>
     <div class="grav-sec">GRAVAÇÕES</div>
     <div id="gravLista"></div>
   </div>
@@ -2853,8 +2870,9 @@ document.getElementById('cCorpo').addEventListener('click', e=>{
 
 /* ===================== GRAVADOR ===================== */
 let gravDB=null,gravExp=null,gravExpRec=null;
-let _gr={rec:null,chunks:[],timer:null,t0:0,stream:null,on:false};
+let _gr={rec:null,chunks:[],timer:null,t0:0,on:false};
 let _gp={ctx:null,src:null,id:null,rec:null,t0:0,off:0,raf:null,bufs:{}};
+let _gMon={stream:null,analyser:null,src:null,raf:null,active:false};
 
 function _gFmt(s){if(!isFinite(s)||s<0)s=0;return Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0');}
 function _gCtx(){
@@ -2877,25 +2895,68 @@ function gravAll(){return gravAbrirDB().then(db=>new Promise((ok,err)=>{const r=
 function gravGet(id){return gravAbrirDB().then(db=>new Promise((ok,err)=>{const r=db.transaction('recs','readonly').objectStore('recs').get(id);r.onsuccess=()=>ok(r.result);r.onerror=()=>err(r.error);}));}
 function gravDel(id){return gravAbrirDB().then(db=>new Promise((ok,err)=>{const r=db.transaction('recs','readwrite').objectStore('recs').delete(id);r.onsuccess=()=>ok();r.onerror=()=>err(r.error);}));}
 
+async function gravAtivarMic(){
+  if(_gMon.active)return;
+  try{
+    _gMon.stream=await navigator.mediaDevices.getUserMedia({
+      audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}
+    });
+  }catch(e){alert('Microfone não disponível.');return;}
+  const ctx=_gCtx();
+  _gMon.src=ctx.createMediaStreamSource(_gMon.stream);
+  _gMon.analyser=ctx.createAnalyser();
+  _gMon.analyser.fftSize=2048;
+  _gMon.analyser.smoothingTimeConstant=0.7;
+  _gMon.src.connect(_gMon.analyser);
+  _gMon.active=true;
+  document.getElementById('gravMicBtn').classList.add('oculto');
+  _gMonLoop();
+}
+function _gMonLoop(){
+  if(!_gMon.active)return;
+  const data=new Float32Array(_gMon.analyser.fftSize);
+  _gMon.analyser.getFloatTimeDomainData(data);
+  let peak=0;
+  for(let i=0;i<data.length;i++){const a=Math.abs(data[i]);if(a>peak)peak=a;}
+  const db=20*Math.log10(Math.max(peak,1e-10));
+  const pct=Math.max(0,Math.min(100,((db+60)/54)*100));
+  const bar=document.getElementById('gravMeter');
+  const lbl=document.getElementById('gravMeterLbl');
+  if(bar)bar.style.width=pct+'%';
+  if(lbl)lbl.textContent=db>-55?Math.round(db)+' dB':'...';
+  _gMon.raf=requestAnimationFrame(_gMonLoop);
+}
+function gravPararMic(){
+  _gMon.active=false;
+  if(_gMon.raf){cancelAnimationFrame(_gMon.raf);_gMon.raf=null;}
+  if(_gMon.src){try{_gMon.src.disconnect();}catch(e){}_gMon.src=null;}
+  if(_gMon.stream){_gMon.stream.getTracks().forEach(t=>t.stop());_gMon.stream=null;}
+  _gMon.analyser=null;
+  const bar=document.getElementById('gravMeter');
+  const lbl=document.getElementById('gravMeterLbl');
+  if(bar)bar.style.width='0';
+  if(lbl)lbl.textContent='mic desligado';
+}
+
 async function toggleGravacao(){
   if(_gr.on){_gPararGrav();return;}
-  try{_gr.stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});}catch(e){alert('Microfone não disponível.');return;}
+  if(!_gMon.active)await gravAtivarMic();
+  if(!_gMon.stream)return;
   _gr.chunks=[];
   const opts={};
   if(typeof MediaRecorder!=='undefined')
     ['audio/webm;codecs=opus','audio/mp4','audio/ogg;codecs=opus'].some(t=>{if(MediaRecorder.isTypeSupported(t)){opts.mimeType=t;return true;}});
-  _gr.rec=new MediaRecorder(_gr.stream,opts);
+  _gr.rec=new MediaRecorder(_gMon.stream,opts);
   _gr.rec.ondataavailable=e=>{if(e.data.size>0)_gr.chunks.push(e.data);};
   _gr.rec.onstop=async()=>{
     const blob=new Blob(_gr.chunks,{type:_gr.rec.mimeType||'audio/webm'});
-    _gr.stream.getTracks().forEach(t=>t.stop());_gr.stream=null;
     let dur=0;
-    try{const c=new(window.AudioContext||window.webkitAudioContext)();const b=await c.decodeAudioData(await blob.arrayBuffer());dur=b.duration;c.close();}catch(e){}
+    try{const b=await _gCtx().decodeAudioData(await blob.arrayBuffer());dur=b.duration;}catch(e){}
     const d=new Date(),nome='Gravação '+d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
     await gravPut({nome,blob,duracao:dur,criadoEm:Date.now(),tuning:0,loop:false,trimInicio:0,trimFim:dur});
     montaGravLista();
   };
-  _gr.rec.start(500);
+  _gr.rec.start();
   _gr.on=true;_gr.t0=Date.now();
   document.getElementById('gravRecBtn').classList.add('gravando');
   document.getElementById('gravRecBtn').textContent='⏹';
@@ -3012,10 +3073,12 @@ function abrirGravador(){
   document.getElementById('cifra').style.display='none';
   document.getElementById('afinador').style.display='none';
   document.getElementById('gravador').style.display='flex';
+  if(!_gMon.active)document.getElementById('gravMicBtn').classList.remove('oculto');
   montaGravLista();
 }
 function voltarDoGravador(){
   gravParar(1);if(_gr.on)_gPararGrav();
+  gravPararMic();
   document.getElementById('gravador').style.display='none';
   document.getElementById('lista').style.display='block';
 }
