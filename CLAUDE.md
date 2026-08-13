@@ -90,6 +90,20 @@ Resposta, Anna Júlia.
 - Músicas de fingerstyle/tab (Blackbird, See You, About a Girl etc.): letra no
   Cifra, tablatura no modo Solo.
 
+## Gravador (novo)
+- Seção acessível pelo botão **⏺ Gravador** na home.
+- **Gravar** áudio do microfone (MediaRecorder API).
+- **Playlist** de gravações armazenadas em IndexedDB (no sandbox do navegador —
+  cada dispositivo tem as suas; sem PWA, iOS pode limpar após 7 dias de inatividade).
+- **Waveform** visual do áudio com progresso ao tocar.
+- **Loop** para repetição contínua.
+- **Tune** (detune ±12 semitons) para ajustar afinação do backing track.
+- **Recorte** não-destrutivo (trim start/end) — mantém o blob original.
+- **Renomear** gravações.
+- **Exportar** como arquivo (WAV se recortado, formato original caso contrário).
+- **Apagar** gravações com confirmação.
+- Funciona em desktop e mobile. Requer HTTPS (ou localhost) para acesso ao microfone.
+
 ## Deploy (publicado)
 - **Repo:** github.com/bitnied/violao-cifras (público, branch `main`, `noindex` no HTML).
 - **URL ao vivo (HTTPS):** https://bitnied.github.io/violao-cifras/

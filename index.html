@@ -211,6 +211,63 @@
   .tab-ctrl button:active{background:#2a313b;}
   .tab-ctrl .salvar{background:var(--accent); color:#111;}
   .tab-ctrl .lbl{font-size:13px; color:var(--muted); min-width:74px; text-align:center;}
+  /* ---------- GRAVADOR ---------- */
+  #gravador{display:none; flex-direction:column; height:100vh; height:100dvh;}
+  .grav-corpo{flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch;
+    padding:14px 12px 24px; overscroll-behavior:contain;}
+  .grav-rec{display:flex; align-items:center; justify-content:center; gap:20px;
+    padding:24px 0 20px;}
+  .grav-rec-btn{width:72px; height:72px; border-radius:50%; border:3px solid #e53935;
+    background:transparent; color:#e53935; font-size:28px; transition:all .15s;}
+  .grav-rec-btn:active{transform:scale(.9);}
+  .grav-rec-btn.gravando{background:#e53935; color:#fff;
+    animation:pulse-grav 1s infinite;}
+  @keyframes pulse-grav{0%,100%{box-shadow:0 0 0 0 rgba(229,57,53,.4);}
+    50%{box-shadow:0 0 0 14px rgba(229,57,53,0);}}
+  .grav-rec-timer{font-size:32px; font-weight:700; min-width:80px;
+    font-variant-numeric:tabular-nums;}
+  .grav-sec{font-size:13px; color:var(--muted); margin:4px 0 10px 2px;
+    font-weight:600; letter-spacing:.04em;}
+  .grav-vazio{color:var(--muted); font-style:italic; font-size:14px; padding:16px 4px;}
+  .grav-card{background:var(--bg2); border-radius:14px; margin-bottom:10px;
+    overflow:hidden; border:1px solid transparent; transition:border-color .15s;}
+  .grav-card.ativo{border-color:var(--line);}
+  .grav-card-top{display:flex; align-items:center; gap:10px; padding:12px 14px;
+    cursor:pointer; user-select:none; -webkit-user-select:none;}
+  .grav-card-top:active{background:#222831;}
+  .grav-pbtn{width:40px; height:40px; border-radius:50%; border:none;
+    background:var(--accent); color:#111; font-size:16px; flex-shrink:0; font-weight:700;}
+  .grav-pbtn:active{filter:brightness(.85);}
+  .grav-pbtn.tocando{background:#e53935; color:#fff;}
+  .grav-cinfo{flex:1; min-width:0;}
+  .grav-cinfo .nome{font-size:15px; font-weight:600; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis;}
+  .grav-cinfo .dur{font-size:12px; color:var(--muted);}
+  .grav-det{padding:0 14px 14px;}
+  .grav-wave{width:100%; height:52px; border-radius:8px; background:var(--bg);
+    display:block; touch-action:none;}
+  .grav-tempos{display:flex; justify-content:space-between; font-size:11px;
+    color:var(--muted); margin:3px 2px 8px; font-variant-numeric:tabular-nums;}
+  .grav-row{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px;}
+  .grav-btn{background:var(--bg); border:none; color:var(--fg); height:38px;
+    min-width:38px; border-radius:10px; font-size:14px; padding:0 10px;}
+  .grav-btn:active{background:#2a313b;}
+  .grav-btn.on{background:var(--accent); color:#111;}
+  .grav-tlbl{font-size:12px; color:var(--muted);}
+  .grav-tval{font-size:16px; font-weight:700; color:var(--accent);
+    min-width:30px; text-align:center;}
+  .grav-trim-sec{margin:8px 0; padding:8px 10px; background:var(--bg); border-radius:10px;}
+  .grav-trim-r{display:flex; align-items:center; gap:6px; margin-bottom:4px;}
+  .grav-trim-r:last-child{margin-bottom:0;}
+  .grav-trim-r span:first-child{font-size:11px; color:var(--muted); min-width:36px;}
+  .grav-trim-r input[type=range]{flex:1; accent-color:var(--accent);}
+  .grav-trim-r .tv{font-size:12px; color:var(--accent); min-width:40px;
+    text-align:right; font-variant-numeric:tabular-nums;}
+  .grav-acoes{display:flex; gap:6px;}
+  .grav-acoes button{flex:1; height:36px; border:none; border-radius:10px;
+    font-size:13px; background:var(--bg); color:var(--fg);}
+  .grav-acoes button:active{background:#2a313b;}
+  .grav-acoes .perigo{color:#ef5350;}
 </style>
 </head>
 <body>
@@ -321,6 +378,22 @@
     </div>
     <button class="af-start" id="afStart" onclick="ligarMic()">🎙️ Ativar microfone</button>
     <div class="af-status" id="afStatus"></div>
+  </div>
+</div>
+
+<!-- ============ TELA: GRAVADOR ============ -->
+<div id="gravador">
+  <div class="topo">
+    <button class="voltar" onclick="voltarDoGravador()">‹</button>
+    <div class="titulo"><div class="t">Gravador</div><div class="a">backing tracks para prática</div></div>
+  </div>
+  <div class="grav-corpo">
+    <div class="grav-rec">
+      <button class="grav-rec-btn" id="gravRecBtn" onclick="toggleGravacao()">⏺</button>
+      <span class="grav-rec-timer" id="gravTimer">0:00</span>
+    </div>
+    <div class="grav-sec">GRAVAÇÕES</div>
+    <div id="gravLista"></div>
   </div>
 </div>
 
@@ -2047,6 +2120,7 @@ function abrirPorTitulo(t){
 function montaLista(){
   const el = document.getElementById('lista');
   let html = `<div class="home-top"><h1>🎸 Minhas Cifras</h1>
+    <button class="afinador-btn" onclick="abrirGravador()">⏺ Gravador</button>
     <button class="afinador-btn" onclick="abrirAfinador()">🎙️ Afinador</button></div>`;
   listaOrdenada().forEach(m=>{
     const fav = favoritos.has(m.titulo);
@@ -2429,6 +2503,7 @@ function abrirAfinador(){
   pararScroll();
   document.getElementById('lista').style.display='none';
   document.getElementById('cifra').style.display='none';
+  document.getElementById('gravador').style.display='none';
   document.getElementById('afinador').style.display='flex';
   carregarAjustesAf();
   montaCordas();
@@ -2772,6 +2847,298 @@ document.getElementById('cCorpo').addEventListener('click', e=>{
   const ac=e.target.closest('.ac'); if(!ac) return;
   const nome=ac.textContent.trim(); if(nome) abrirAcorde(nome);
 });
+
+/* ===================== GRAVADOR ===================== */
+let gravDB=null,gravExp=null,gravExpRec=null;
+let _gr={rec:null,chunks:[],timer:null,t0:0,stream:null,on:false};
+let _gp={ctx:null,src:null,id:null,rec:null,t0:0,off:0,raf:null,bufs:{}};
+
+function _gFmt(s){if(!isFinite(s)||s<0)s=0;return Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0');}
+function _gCtx(){
+  if(!_gp.ctx||_gp.ctx.state==='closed') _gp.ctx=new(window.AudioContext||window.webkitAudioContext)();
+  if(_gp.ctx.state==='suspended') _gp.ctx.resume();
+  return _gp.ctx;
+}
+
+function gravAbrirDB(){
+  return new Promise((ok,err)=>{
+    if(gravDB){ok(gravDB);return;}
+    const r=indexedDB.open('gravador_db',1);
+    r.onupgradeneeded=e=>{if(!e.target.result.objectStoreNames.contains('recs')) e.target.result.createObjectStore('recs',{keyPath:'id',autoIncrement:true});};
+    r.onsuccess=e=>{gravDB=e.target.result;ok(gravDB);};
+    r.onerror=e=>err(e.target.error);
+  });
+}
+function gravPut(o){return gravAbrirDB().then(db=>new Promise((ok,err)=>{const r=db.transaction('recs','readwrite').objectStore('recs').put(o);r.onsuccess=()=>ok(r.result);r.onerror=()=>err(r.error);}));}
+function gravAll(){return gravAbrirDB().then(db=>new Promise((ok,err)=>{const r=db.transaction('recs','readonly').objectStore('recs').getAll();r.onsuccess=()=>ok(r.result);r.onerror=()=>err(r.error);}));}
+function gravGet(id){return gravAbrirDB().then(db=>new Promise((ok,err)=>{const r=db.transaction('recs','readonly').objectStore('recs').get(id);r.onsuccess=()=>ok(r.result);r.onerror=()=>err(r.error);}));}
+function gravDel(id){return gravAbrirDB().then(db=>new Promise((ok,err)=>{const r=db.transaction('recs','readwrite').objectStore('recs').delete(id);r.onsuccess=()=>ok();r.onerror=()=>err(r.error);}));}
+
+async function toggleGravacao(){
+  if(_gr.on){_gPararGrav();return;}
+  try{_gr.stream=await navigator.mediaDevices.getUserMedia({audio:true});}catch(e){alert('Microfone não disponível.');return;}
+  _gr.chunks=[];
+  const opts={};
+  if(typeof MediaRecorder!=='undefined')
+    ['audio/webm;codecs=opus','audio/mp4','audio/ogg;codecs=opus'].some(t=>{if(MediaRecorder.isTypeSupported(t)){opts.mimeType=t;return true;}});
+  _gr.rec=new MediaRecorder(_gr.stream,opts);
+  _gr.rec.ondataavailable=e=>{if(e.data.size>0)_gr.chunks.push(e.data);};
+  _gr.rec.onstop=async()=>{
+    const blob=new Blob(_gr.chunks,{type:_gr.rec.mimeType||'audio/webm'});
+    _gr.stream.getTracks().forEach(t=>t.stop());_gr.stream=null;
+    let dur=0;
+    try{const c=new(window.AudioContext||window.webkitAudioContext)();const b=await c.decodeAudioData(await blob.arrayBuffer());dur=b.duration;c.close();}catch(e){}
+    const d=new Date(),nome='Gravação '+d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    await gravPut({nome,blob,duracao:dur,criadoEm:Date.now(),tuning:0,loop:false,trimInicio:0,trimFim:dur});
+    montaGravLista();
+  };
+  _gr.rec.start(500);
+  _gr.on=true;_gr.t0=Date.now();
+  document.getElementById('gravRecBtn').classList.add('gravando');
+  document.getElementById('gravRecBtn').textContent='⏹';
+  _gr.timer=setInterval(()=>{document.getElementById('gravTimer').textContent=_gFmt((Date.now()-_gr.t0)/1000);},200);
+}
+function _gPararGrav(){
+  if(_gr.rec&&_gr.rec.state!=='inactive')_gr.rec.stop();
+  _gr.on=false;clearInterval(_gr.timer);
+  document.getElementById('gravTimer').textContent='0:00';
+  const b=document.getElementById('gravRecBtn');b.classList.remove('gravando');b.textContent='⏺';
+}
+
+async function _gDecode(id){
+  if(_gp.bufs[id])return _gp.bufs[id];
+  const rec=await gravGet(id);if(!rec)return null;
+  const buf=await _gCtx().decodeAudioData(await rec.blob.arrayBuffer());
+  _gp.bufs[id]=buf;return buf;
+}
+
+async function gravTocar(id,seek){
+  gravParar(1);
+  const rec=await gravGet(id);if(!rec)return;
+  const ctx=_gCtx();
+  const buf=await _gDecode(id);if(!buf)return;
+  const src=ctx.createBufferSource();
+  src.buffer=buf;
+  src.detune.value=(rec.tuning||0)*100;
+  const ti=rec.trimInicio||0,tf=rec.trimFim||rec.duracao,loop=rec.loop||false;
+  src.loop=loop;
+  if(loop){src.loopStart=ti;src.loopEnd=tf;}
+  src.connect(ctx.destination);
+  const off=seek!==undefined?Math.max(ti,Math.min(tf,seek)):ti;
+  src.start(0,off,loop?undefined:Math.max(0.01,tf-off));
+  src.onended=()=>{if(_gp.id===id){_gp.id=null;_gp.src=null;cancelAnimationFrame(_gp.raf);montaGravLista();}};
+  _gp.src=src;_gp.id=id;_gp.rec=rec;_gp.t0=ctx.currentTime;_gp.off=off;
+  montaGravLista();
+  _gProgLoop();
+}
+function gravParar(q){
+  if(_gp.src){try{_gp.src.stop();}catch(e){}_gp.src.disconnect();_gp.src=null;}
+  cancelAnimationFrame(_gp.raf);_gp.raf=null;
+  const was=_gp.id;_gp.id=null;
+  if(!q&&was!==null)montaGravLista();
+}
+
+function _gProgLoop(){
+  if(_gp.id===null)return;
+  const r=_gp.rec,ctx=_gCtx();
+  const rate=Math.pow(2,((r.tuning||0)*100)/1200);
+  const elapsed=(ctx.currentTime-_gp.t0)*rate;
+  const ti=r.trimInicio||0,tf=r.trimFim||r.duracao,dur=tf-ti;
+  let pos;
+  if(r.loop){const raw=((_gp.off-ti)+elapsed)%dur;pos=ti+(raw<0?raw+dur:raw);}
+  else pos=Math.min(_gp.off+elapsed,tf);
+  const cv=document.querySelector(`[data-gw="${_gp.id}"]`);
+  if(cv&&_gp.bufs[_gp.id])_gDrawWave(cv,_gp.bufs[_gp.id],r,pos);
+  const tel=document.querySelector(`[data-gt="${_gp.id}"]`);
+  if(tel)tel.textContent=_gFmt(pos-ti);
+  _gp.raf=requestAnimationFrame(_gProgLoop);
+}
+
+function _gDrawWave(cv,buf,rec,pos){
+  const dpr=window.devicePixelRatio||1;
+  const cw=cv.clientWidth,ch=cv.clientHeight;
+  if(!cw)return;
+  const pw=Math.round(cw*dpr),ph=Math.round(ch*dpr);
+  if(cv.width!==pw||cv.height!==ph){cv.width=pw;cv.height=ph;}
+  const w=cv.width,h=cv.height,c=cv.getContext('2d');
+  c.clearRect(0,0,w,h);
+  const data=buf.getChannelData(0),spp=Math.max(1,Math.floor(data.length/w));
+  const ti=rec.trimInicio||0,tf=rec.trimFim||rec.duracao,dur=buf.duration;
+  for(let x=0;x<w;x++){
+    const s0=x*spp,s1=Math.min(s0+spp,data.length);
+    let mx=0;for(let i=s0;i<s1;i++){const a=Math.abs(data[i]);if(a>mx)mx=a;}
+    const bh=Math.max(1,mx*h*.88);
+    const t=(x/w)*dur;
+    c.fillStyle=(t>=ti&&t<=tf)?'#3a4452':'#1a1f26';
+    c.fillRect(x,(h-bh)/2,1,bh);
+  }
+  if(pos!==undefined&&pos>=0){
+    c.fillStyle='#ffcc55';c.fillRect(Math.round((pos/dur)*w),0,2,h);
+  }
+}
+
+function gravWaveClick(e){
+  const cv=e.target;if(!cv.hasAttribute('data-gw'))return;
+  const id=parseInt(cv.getAttribute('data-gw'));if(!id)return;
+  const rect=cv.getBoundingClientRect();
+  const x=(e.clientX!==undefined?e.clientX:0)-rect.left;
+  const ratio=Math.max(0,Math.min(1,x/rect.width));
+  gravGet(id).then(rec=>{if(rec)gravTocar(id,ratio*rec.duracao);});
+}
+
+function _gToWav(buf){
+  const nc=buf.numberOfChannels,sr=buf.sampleRate,len=buf.length;
+  const ba=nc*2,dl=len*ba,ab=new ArrayBuffer(44+dl),v=new DataView(ab);
+  const ws=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i));};
+  ws(0,'RIFF');v.setUint32(4,36+dl,true);ws(8,'WAVE');ws(12,'fmt ');
+  v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,nc,true);
+  v.setUint32(24,sr,true);v.setUint32(28,sr*ba,true);v.setUint16(32,ba,true);
+  v.setUint16(34,16,true);ws(36,'data');v.setUint32(40,dl,true);
+  const ch=[];for(let c=0;c<nc;c++)ch.push(buf.getChannelData(c));
+  let off=44;
+  for(let i=0;i<len;i++)for(let c=0;c<nc;c++){
+    let s=Math.max(-1,Math.min(1,ch[c][i]));
+    v.setInt16(off,s<0?s*0x8000:s*0x7FFF,true);off+=2;
+  }
+  return new Blob([ab],{type:'audio/wav'});
+}
+
+function abrirGravador(){
+  pararScroll();gravParar(1);
+  document.getElementById('lista').style.display='none';
+  document.getElementById('cifra').style.display='none';
+  document.getElementById('afinador').style.display='none';
+  document.getElementById('gravador').style.display='flex';
+  montaGravLista();
+}
+function voltarDoGravador(){
+  gravParar(1);if(_gr.on)_gPararGrav();
+  document.getElementById('gravador').style.display='none';
+  document.getElementById('lista').style.display='block';
+}
+
+async function montaGravLista(){
+  const recs=await gravAll();
+  const el=document.getElementById('gravLista');
+  if(!recs.length){el.innerHTML='<div class="grav-vazio">Nenhuma gravação ainda. Aperte ⏺ para gravar.</div>';return;}
+  recs.sort((a,b)=>b.criadoEm-a.criadoEm);
+  el.innerHTML=recs.map(r=>_gCardHTML(r,gravExp===r.id,_gp.id===r.id)).join('');
+  if(gravExp!==null){
+    const rec=recs.find(r=>r.id===gravExp);
+    if(rec){
+      gravExpRec=Object.assign({},rec);
+      requestAnimationFrame(async()=>{
+        const cv=document.querySelector(`[data-gw="${rec.id}"]`);
+        if(cv){const buf=await _gDecode(rec.id);if(buf)_gDrawWave(cv,buf,gravExpRec);}
+      });
+    }
+  }
+}
+
+function _gCardHTML(r,exp,play){
+  const id=r.id,ti=r.trimInicio||0,tf=r.trimFim||r.duracao,td=tf-ti;
+  const tu=r.tuning||0,ts=tu>0?'+'+tu:String(tu),lp=r.loop||false;
+  let h=`<div class="grav-card${exp?' ativo':''}">`;
+  h+=`<div class="grav-card-top" onclick="gravExpandir(${id})">`;
+  h+=`<button class="grav-pbtn${play?' tocando':''}" onclick="event.stopPropagation();${play?'gravParar()':'gravTocar('+id+')'}">`;
+  h+=play?'⏹':'▶';
+  h+=`</button><div class="grav-cinfo"><div class="nome">${esc(r.nome)}</div>`;
+  h+=`<div class="dur">${_gFmt(td)}${Math.abs(td-r.duracao)>0.5?' / '+_gFmt(r.duracao):''}</div>`;
+  h+=`</div></div>`;
+  if(exp){
+    h+=`<div class="grav-det">`;
+    h+=`<canvas class="grav-wave" data-gw="${id}" onclick="gravWaveClick(event)"></canvas>`;
+    h+=`<div class="grav-tempos"><span data-gt="${id}">0:00</span><span>${_gFmt(td)}</span></div>`;
+    h+=`<div class="grav-row">`;
+    h+=`<button class="grav-btn${lp?' on':''}" onclick="gravToggleLoop(${id})">🔁</button>`;
+    h+=`<span class="grav-tlbl">Tom</span>`;
+    h+=`<button class="grav-btn" onclick="gravMudarTune(${id},-1)">−</button>`;
+    h+=`<span class="grav-tval">${ts}</span>`;
+    h+=`<button class="grav-btn" onclick="gravMudarTune(${id},1)">+</button>`;
+    h+=`</div>`;
+    const step=Math.max(0.01,r.duracao/500).toFixed(2);
+    h+=`<div class="grav-trim-sec">`;
+    h+=`<div class="grav-trim-r"><span>Início</span><input type="range" min="0" max="${r.duracao.toFixed(2)}" step="${step}" value="${ti.toFixed(2)}" oninput="gravTrimInput('i',this.value)" onchange="gravTrimSave()"><span class="tv" id="gtv_i">${_gFmt(ti)}</span></div>`;
+    h+=`<div class="grav-trim-r"><span>Fim</span><input type="range" min="0" max="${r.duracao.toFixed(2)}" step="${step}" value="${tf.toFixed(2)}" oninput="gravTrimInput('f',this.value)" onchange="gravTrimSave()"><span class="tv" id="gtv_f">${_gFmt(tf)}</span></div>`;
+    h+=`</div>`;
+    h+=`<div class="grav-acoes">`;
+    h+=`<button onclick="gravRenomear(${id})">✏️ Renomear</button>`;
+    h+=`<button onclick="gravExportar(${id})">📥 Exportar</button>`;
+    h+=`<button class="perigo" onclick="gravApagar(${id})">🗑 Apagar</button>`;
+    h+=`</div></div>`;
+  }
+  h+=`</div>`;return h;
+}
+
+function gravExpandir(id){gravExp=gravExp===id?null:id;gravExpRec=null;montaGravLista();}
+
+async function gravToggleLoop(id){
+  const r=await gravGet(id);if(!r)return;
+  r.loop=!r.loop;await gravPut(r);
+  if(_gp.id===id)gravTocar(id);else montaGravLista();
+}
+
+async function gravMudarTune(id,d){
+  const r=await gravGet(id);if(!r)return;
+  const old=r.tuning||0;r.tuning=Math.max(-12,Math.min(12,old+d));
+  await gravPut(r);
+  if(_gp.id===id){
+    const ctx=_gCtx(),rate=Math.pow(2,(old*100)/1200);
+    const pos=_gp.off+(ctx.currentTime-_gp.t0)*rate;
+    gravTocar(id,pos);return;
+  }
+  montaGravLista();
+}
+
+async function gravRenomear(id){
+  const r=await gravGet(id);if(!r)return;
+  const n=prompt('Nome da gravação:',r.nome);
+  if(n!==null&&n.trim()){r.nome=n.trim();await gravPut(r);montaGravLista();}
+}
+
+async function gravApagar(id){
+  if(!confirm('Apagar esta gravação?'))return;
+  if(_gp.id===id)gravParar(1);
+  await gravDel(id);delete _gp.bufs[id];
+  if(gravExp===id){gravExp=null;gravExpRec=null;}
+  montaGravLista();
+}
+
+async function gravExportar(id){
+  const r=await gravGet(id);if(!r)return;
+  const ti=r.trimInicio||0,tf=r.trimFim||r.duracao;
+  const trimmed=ti>0.05||Math.abs(tf-r.duracao)>0.05;
+  let blob,ext;
+  if(trimmed){
+    const buf=await _gDecode(id),sr=buf.sampleRate,nc=buf.numberOfChannels;
+    const len=Math.floor(tf*sr)-Math.floor(ti*sr);
+    const off=new OfflineAudioContext(nc,len,sr);
+    const src=off.createBufferSource();src.buffer=buf;src.connect(off.destination);
+    src.start(0,ti,tf-ti);blob=_gToWav(await off.startRendering());ext='wav';
+  }else{
+    blob=r.blob;ext=r.blob.type.includes('webm')?'webm':r.blob.type.includes('mp4')?'m4a':'wav';
+  }
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;
+  a.download=(r.nome||'gravacao').replace(/[^a-zA-Z0-9À-ÿ _\-]/g,'')+'.'+ext;
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),5000);
+}
+
+function gravTrimInput(c,v){
+  if(!gravExpRec)return;v=parseFloat(v);
+  if(c==='i')gravExpRec.trimInicio=Math.min(v,(gravExpRec.trimFim||gravExpRec.duracao)-.1);
+  else gravExpRec.trimFim=Math.max(v,(gravExpRec.trimInicio||0)+.1);
+  const el=document.getElementById('gtv_'+c);
+  if(el)el.textContent=_gFmt(c==='i'?gravExpRec.trimInicio:gravExpRec.trimFim);
+  const cv=document.querySelector(`[data-gw="${gravExpRec.id}"]`);
+  if(cv&&_gp.bufs[gravExpRec.id])_gDrawWave(cv,_gp.bufs[gravExpRec.id],gravExpRec);
+}
+async function gravTrimSave(){
+  if(!gravExpRec)return;
+  await gravPut(gravExpRec);
+  montaGravLista();
+}
 
 montaLista();
 </script>
