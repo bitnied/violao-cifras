@@ -8,7 +8,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#111418">
-<title>Cifras</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23111418'/><text x='50' y='68' text-anchor='middle' font-size='48' font-weight='800' fill='%23ffcc55' font-family='sans-serif'>VV</text></svg>">
+<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAIAAACyr5FlAAACbElEQVR42u3dwU3DQBCG0bQQiQON0TU9kQY4rO31ev6dJ31n73j0FEEC8ev99S3928sKBIfgEByCQ3AIDsEhOASH4JDgEByCQ3AIDsEhOASH4BAcEhyCQ3AIDsEhOASH4BAcgkOCQ3AIDsEhOASH4BAcgkNwCA4JDsGhqjj+fn9GevzmzVkUBxn1lwkHHHDAUecH0uJ7H5QRMWfebytwwAEHHHv5OCSj+Jypb4LBAQcccOzi44SMsnNmf7YCBxxwwJHv47SMgnPu8JE9HHDAAQcccGx5qxdllJpznz8ThAMOOODIvOHBAVLmhAMOOOBojuPZ2z50dMqccMABBxzNcQzef5FDU+aEAw444GiOY/0KTh+XMicccMABBxxwwPH8Ii4elDInHHDAAUdzHGvWMeWIlDnhgAMOOJrjuHspEy+eMicccMABR3Mc961m+mVT5oQDDjjgaI7jpgV1viYcXo3ggAMOOODwnkSSDDjgCMfx1KVy59wKx6xlLdh4ypxwwAEHHM1xXF/Zso2nzAkHHHDA0RzHlcUt3njKnHDAAQcccMABx8z1Ffxytw1kwAEHHHDsgePoEst+FXW6DDjggAOObXCMr7L4g3OiZcABBxxw7IRjZKERj/nMlQEHHHCYczMc7wsP+zQnHHA0xnF67+aEA47eOE7s3ZxwwAEHHHDM2rs54YADDjjgmLV3c8IBBxxwwLHg/8zMCYc54YADDsEhOASH4BAcgkOCQ3AIDsEhOASH4BAcgkNwSHAIDsEhOASH4BAcgkNwCA4JDsEhOASH4BAcgkNwCA7BIThsQXAIDsEhOASH4BAc2qIPdjjC4WE+9QcAAAAASUVORK5CYII=">
+<title>VV</title>
 <style>
   :root{
     --bg:#111418; --bg2:#1a1f26; --fg:#e7ebf0; --muted:#8a93a0;
@@ -131,6 +133,7 @@
   /* ---------- HOME: cabeçalho com botão Afinador ---------- */
   .home-top{display:flex; align-items:center; gap:10px; margin:8px 4px 14px;}
   .home-top h1{margin:0; flex:1;}
+  .home-top .ver{font-size:11px; color:var(--muted); font-weight:400; margin-left:6px;}
   .afinador-btn{background:var(--bg2); border:1px solid var(--line); color:var(--fg);
     font-size:14px; font-weight:600; padding:10px 14px; border-radius:12px;
     white-space:nowrap;}
@@ -2119,7 +2122,7 @@ function abrirPorTitulo(t){
 
 function montaLista(){
   const el = document.getElementById('lista');
-  let html = `<div class="home-top"><h1>🎸 Minhas Cifras</h1>
+  let html = `<div class="home-top"><h1>VV <span class="ver">v2.0</span></h1>
     <button class="afinador-btn" onclick="abrirGravador()">⏺ Gravador</button>
     <button class="afinador-btn" onclick="abrirAfinador()">🎙️ Afinador</button></div>`;
   listaOrdenada().forEach(m=>{
