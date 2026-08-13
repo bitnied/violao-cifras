@@ -2139,7 +2139,7 @@ function abrirPorTitulo(t){
 
 function montaLista(){
   const el = document.getElementById('lista');
-  let html = `<div class="home-top"><h1>VV <span class="ver">v2.1</span></h1>
+  let html = `<div class="home-top"><h1>VV <span class="ver">v2.2</span></h1>
     <button class="afinador-btn" onclick="abrirGravador()">⏺ Gravador</button>
     <button class="afinador-btn" onclick="abrirAfinador()">🎙️ Afinador</button></div>`;
   listaOrdenada().forEach(m=>{
@@ -2942,31 +2942,44 @@ async function toggleGravacao(){
   if(_gr.on){_gPararGrav();return;}
   if(!_gMon.active)await gravAtivarMic();
   if(!_gMon.stream)return;
+  const ctx=_gCtx();
   _gr.chunks=[];
-  const opts={};
-  if(typeof MediaRecorder!=='undefined')
-    ['audio/webm;codecs=opus','audio/mp4','audio/ogg;codecs=opus'].some(t=>{if(MediaRecorder.isTypeSupported(t)){opts.mimeType=t;return true;}});
-  _gr.rec=new MediaRecorder(_gMon.stream,opts);
-  _gr.rec.ondataavailable=e=>{if(e.data.size>0)_gr.chunks.push(e.data);};
-  _gr.rec.onstop=async()=>{
-    const blob=new Blob(_gr.chunks,{type:_gr.rec.mimeType||'audio/webm'});
-    let dur=0;
-    try{const b=await _gCtx().decodeAudioData(await blob.arrayBuffer());dur=b.duration;}catch(e){}
-    const d=new Date(),nome='Gravação '+d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
-    await gravPut({nome,blob,duracao:dur,criadoEm:Date.now(),tuning:0,loop:false,trimInicio:0,trimFim:dur});
-    montaGravLista();
+  _gr.sRate=ctx.sampleRate;
+  _gr.recSrc=ctx.createMediaStreamSource(_gMon.stream);
+  _gr.proc=ctx.createScriptProcessor(4096,1,1);
+  _gr.proc.onaudioprocess=e=>{
+    if(_gr.on)_gr.chunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
   };
-  _gr.rec.start();
+  _gr.sil=ctx.createGain();
+  _gr.sil.gain.value=0;
+  _gr.recSrc.connect(_gr.proc);
+  _gr.proc.connect(_gr.sil);
+  _gr.sil.connect(ctx.destination);
   _gr.on=true;_gr.t0=Date.now();
   document.getElementById('gravRecBtn').classList.add('gravando');
   document.getElementById('gravRecBtn').textContent='⏹';
   _gr.timer=setInterval(()=>{document.getElementById('gravTimer').textContent=_gFmt((Date.now()-_gr.t0)/1000);},200);
 }
 function _gPararGrav(){
-  if(_gr.rec&&_gr.rec.state!=='inactive')_gr.rec.stop();
   _gr.on=false;clearInterval(_gr.timer);
+  if(_gr.proc){try{_gr.proc.disconnect();}catch(e){}_gr.proc=null;}
+  if(_gr.recSrc){try{_gr.recSrc.disconnect();}catch(e){}_gr.recSrc=null;}
+  if(_gr.sil){try{_gr.sil.disconnect();}catch(e){}_gr.sil=null;}
+  const chunks=_gr.chunks;_gr.chunks=[];
   document.getElementById('gravTimer').textContent='0:00';
-  const b=document.getElementById('gravRecBtn');b.classList.remove('gravando');b.textContent='⏺';
+  const btn=document.getElementById('gravRecBtn');btn.classList.remove('gravando');btn.textContent='⏺';
+  if(!chunks.length)return;
+  const total=chunks.reduce((s,c)=>s+c.length,0);
+  const merged=new Float32Array(total);
+  let off=0;
+  for(const c of chunks){merged.set(c,off);off+=c.length;}
+  const ctx=_gCtx();
+  const buf=ctx.createBuffer(1,total,_gr.sRate||ctx.sampleRate);
+  buf.getChannelData(0).set(merged);
+  const blob=_gToWav(buf);
+  const dur=buf.duration;
+  const d=new Date(),nome='Gravação '+d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+  gravPut({nome,blob,duracao:dur,criadoEm:Date.now(),tuning:0,loop:false,trimInicio:0,trimFim:dur}).then(()=>montaGravLista());
 }
 
 async function _gDecode(id){
