@@ -2876,7 +2876,7 @@ function gravDel(id){return gravAbrirDB().then(db=>new Promise((ok,err)=>{const 
 
 async function toggleGravacao(){
   if(_gr.on){_gPararGrav();return;}
-  try{_gr.stream=await navigator.mediaDevices.getUserMedia({audio:true});}catch(e){alert('Microfone não disponível.');return;}
+  try{_gr.stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});}catch(e){alert('Microfone não disponível.');return;}
   _gr.chunks=[];
   const opts={};
   if(typeof MediaRecorder!=='undefined')
