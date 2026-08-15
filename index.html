@@ -2161,7 +2161,7 @@ function abrirPorTitulo(t){
 
 function montaLista(){
   const el = document.getElementById('lista');
-  let html = `<div class="home-top"><h1>VV <span class="ver">v2.3</span></h1>
+  let html = `<div class="home-top"><h1>VV <span class="ver">v2.4</span></h1>
     <button class="afinador-btn" onclick="abrirGravador()">⏺ Gravador</button>
     <button class="afinador-btn" onclick="abrirAfinador()">🎙️ Afinador</button></div>`;
   listaOrdenada().forEach(m=>{
@@ -2895,7 +2895,7 @@ let gravDB=null,gravExp=null,gravExpRec=null;
 let _gr={chunks:[],timer:null,t0:0,on:false,gain:6,gate:false,env:0,gg:0,proc:null,recSrc:null,sil:null,sRate:0};
 try{_gr.gain=+(localStorage.getItem('grav_gain'))||6;_gr.gate=localStorage.getItem('grav_gate')==='1';}catch(e){}
 let _gp={ctx:null,src:null,id:null,rec:null,t0:0,off:0,raf:null,bufs:{}};
-let _gMon={stream:null,analyser:null,src:null,raf:null,active:false};
+let _gMon={ctx:null,stream:null,analyser:null,src:null,raf:null,active:false};
 
 function gravSetGain(v){_gr.gain=+v||1;var el=document.getElementById('gravGainVal');if(el)el.textContent=_gr.gain+'×';try{localStorage.setItem('grav_gain',_gr.gain);}catch(e){}}
 function gravSetGate(b){_gr.gate=!!b;try{localStorage.setItem('grav_gate',b?'1':'0');}catch(e){}}
@@ -2928,7 +2928,9 @@ async function gravAtivarMic(){
       audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}
     });
   }catch(e){alert('Microfone não disponível.');return;}
-  const ctx=_gCtx();
+  const ctx=new(window.AudioContext||window.webkitAudioContext)();
+  if(ctx.state==='suspended')ctx.resume();
+  _gMon.ctx=ctx;
   _gMon.src=ctx.createMediaStreamSource(_gMon.stream);
   _gMon.analyser=ctx.createAnalyser();
   _gMon.analyser.fftSize=2048;
@@ -2958,17 +2960,20 @@ function gravPararMic(){
   if(_gMon.src){try{_gMon.src.disconnect();}catch(e){}_gMon.src=null;}
   if(_gMon.stream){_gMon.stream.getTracks().forEach(t=>t.stop());_gMon.stream=null;}
   _gMon.analyser=null;
+  if(_gMon.ctx){try{_gMon.ctx.close();}catch(e){}_gMon.ctx=null;}
   const bar=document.getElementById('gravMeter');
   const lbl=document.getElementById('gravMeterLbl');
+  const btn=document.getElementById('gravMicBtn');
   if(bar)bar.style.width='0';
   if(lbl)lbl.textContent='mic desligado';
+  if(btn)btn.classList.remove('oculto');
 }
 
 async function toggleGravacao(){
   if(_gr.on){_gPararGrav();return;}
   if(!_gMon.active)await gravAtivarMic();
-  if(!_gMon.stream)return;
-  const ctx=_gCtx();
+  if(!_gMon.stream||!_gMon.ctx)return;
+  const ctx=_gMon.ctx;
   _gr.chunks=[];_gr.env=0;_gr.gg=0;
   _gr.sRate=ctx.sampleRate;
   _gr.recSrc=ctx.createMediaStreamSource(_gMon.stream);
@@ -3016,7 +3021,7 @@ function _gPararGrav(){
   const merged=new Float32Array(total);
   let off=0;
   for(const c of chunks){merged.set(c,off);off+=c.length;}
-  const ctx=_gCtx();
+  const ctx=_gMon.ctx||_gCtx();
   const buf=ctx.createBuffer(1,total,_gr.sRate||ctx.sampleRate);
   buf.getChannelData(0).set(merged);
   const blob=_gToWav(buf);
@@ -3034,6 +3039,8 @@ async function _gDecode(id){
 
 async function gravTocar(id,seek){
   gravParar(1);
+  if(_gr.on)_gPararGrav();
+  if(_gMon.active)gravPararMic();   // libera o mic p/ iOS voltar ao alto-falante (viva-voz)
   const rec=await gravGet(id);if(!rec)return;
   const ctx=_gCtx();
   const buf=await _gDecode(id);if(!buf)return;
