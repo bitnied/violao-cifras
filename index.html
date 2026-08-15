@@ -2161,7 +2161,7 @@ function abrirPorTitulo(t){
 
 function montaLista(){
   const el = document.getElementById('lista');
-  let html = `<div class="home-top"><h1>VV <span class="ver">v2.4</span></h1>
+  let html = `<div class="home-top"><h1>VV <span class="ver">v2.5</span></h1>
     <button class="afinador-btn" onclick="abrirGravador()">⏺ Gravador</button>
     <button class="afinador-btn" onclick="abrirAfinador()">🎙️ Afinador</button></div>`;
   listaOrdenada().forEach(m=>{
@@ -3041,9 +3041,10 @@ async function gravTocar(id,seek){
   gravParar(1);
   if(_gr.on)_gPararGrav();
   if(_gMon.active)gravPararMic();   // libera o mic p/ iOS voltar ao alto-falante (viva-voz)
+  const ctx=_gCtx();                // criar/resume o contexto DENTRO do gesto de toque (iOS)
   const rec=await gravGet(id);if(!rec)return;
-  const ctx=_gCtx();
   const buf=await _gDecode(id);if(!buf)return;
+  if(ctx.state==='suspended'){try{await ctx.resume();}catch(e){}}
   const src=ctx.createBufferSource();
   src.buffer=buf;
   src.detune.value=(rec.tuning||0)*100;
