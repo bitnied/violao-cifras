@@ -3013,25 +3013,52 @@ function lpAll(){return lpDB().then(db=>new Promise((ok,err)=>{const r=db.transa
 function lpGet(id){return lpDB().then(db=>new Promise((ok,err)=>{const r=db.transaction('loops','readonly').objectStore('loops').get(id);r.onsuccess=()=>ok(r.result);r.onerror=()=>err(r.error);}));}
 function lpDel(id){return lpDB().then(db=>new Promise((ok,err)=>{const r=db.transaction('loops','readwrite').objectStore('loops').delete(id);r.onsuccess=()=>ok();r.onerror=()=>err(r.error);}));}
 
-/* ---- microfone + medidor ---- */
-async function lpEnsureMic(){
-  if(_LP.stream&&_LP.ctx&&_LP.ctx.state!=='closed'){
+/* ---- contexto + microfone + medidor ----
+   IMPORTANTE (iOS): enquanto o microfone está aberto, o Safari roteia a saída
+   para o auscultador (rota de "ligação"), baixinho. Por isso o mic é aberto
+   SÓ enquanto grava e liberado assim que a camada fecha — aí a reprodução do
+   loop volta ao alto-falante estéreo (rota de mídia). navigator.audioSession
+   reforça essa escolha de rota quando disponível. */
+function _lpAudioSession(type){
+  try{ if(navigator.audioSession) navigator.audioSession.type=type; }catch(e){}
+}
+async function lpEnsureCtx(){
+  if(_LP.ctx&&_LP.ctx.state!=='closed'){
     if(_LP.ctx.state==='suspended'){try{await _LP.ctx.resume();}catch(e){}}
     return true;
   }
   try{
+    const ctx=new(window.AudioContext||window.webkitAudioContext)();
+    if(ctx.state==='suspended'){try{await ctx.resume();}catch(e){}}
+    _LP.ctx=ctx; _LP.sr=ctx.sampleRate;
+    _LP.master=ctx.createGain(); _LP.master.gain.value=1; _LP.master.connect(ctx.destination);
+    return true;
+  }catch(e){alert('Áudio não disponível neste navegador.');return false;}
+}
+async function lpAcquireMic(){
+  if(!await lpEnsureCtx())return false;
+  if(_LP.stream&&_LP.micSrc)return true;
+  _lpAudioSession('play-and-record');
+  try{
     _LP.stream=await navigator.mediaDevices.getUserMedia({
       audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
   }catch(e){alert('Microfone não disponível. O Looper precisa do microfone (e de HTTPS).');return false;}
-  const ctx=new(window.AudioContext||window.webkitAudioContext)();
-  if(ctx.state==='suspended'){try{await ctx.resume();}catch(e){}}
-  _LP.ctx=ctx; _LP.sr=ctx.sampleRate;
-  _LP.master=ctx.createGain(); _LP.master.gain.value=1; _LP.master.connect(ctx.destination);
+  const ctx=_LP.ctx;
   _LP.micSrc=ctx.createMediaStreamSource(_LP.stream);
   _LP.analyser=ctx.createAnalyser(); _LP.analyser.fftSize=2048; _LP.analyser.smoothingTimeConstant=0.7;
   _LP.micSrc.connect(_LP.analyser);
   _LP.monOn=true; _lpMonLoop();
   return true;
+}
+function lpReleaseMic(){
+  _LP.monOn=false;
+  if(_LP.monRaf){cancelAnimationFrame(_LP.monRaf);_LP.monRaf=null;}
+  if(_LP.recProc)_lpStopRecNodes();
+  if(_LP.micSrc){try{_LP.micSrc.disconnect();}catch(e){}_LP.micSrc=null;}
+  if(_LP.stream){_LP.stream.getTracks().forEach(t=>t.stop());_LP.stream=null;}
+  _LP.analyser=null;
+  const bar=document.getElementById('lpMeter');if(bar)bar.style.width='0';
+  _lpAudioSession('playback');   // volta à rota de mídia (alto-falante estéreo)
 }
 function _lpMonLoop(){
   if(!_LP.monOn||!_LP.analyser)return;
@@ -3041,21 +3068,14 @@ function _lpMonLoop(){
   const db=20*Math.log10(Math.max(peak*_LP.gain,1e-10));
   const pct=Math.max(0,Math.min(100,((db+60)/54)*100));
   const bar=document.getElementById('lpMeter');
-  const lbl=document.getElementById('lpMeterLbl');
   if(bar)bar.style.width=pct+'%';
-  if(lbl&&_LP.state!=='recbase'&&_LP.state!=='overdub')
-    lbl.textContent=db>-55?Math.round(db)+' dB':'mic pronto';
   _LP.monRaf=requestAnimationFrame(_lpMonLoop);
 }
 function _lpStopMon(){
-  _LP.monOn=false;
-  if(_LP.monRaf){cancelAnimationFrame(_LP.monRaf);_LP.monRaf=null;}
+  lpReleaseMic();
   lpStopAllSrc();
   for(const t of _LP.tracks){t.src=null;t.gain=null;}
-  if(_LP.recProc)_lpStopRecNodes();
-  if(_LP.micSrc){try{_LP.micSrc.disconnect();}catch(e){}_LP.micSrc=null;}
-  if(_LP.stream){_LP.stream.getTracks().forEach(t=>t.stop());_LP.stream=null;}
-  _LP.analyser=null;_LP.master=null;
+  _LP.master=null;
   if(_LP.ctx){try{_LP.ctx.close();}catch(e){}_LP.ctx=null;}
   const bar=document.getElementById('lpMeter');if(bar)bar.style.width='0';
   const lbl=document.getElementById('lpMeterLbl');if(lbl)lbl.textContent='toque no botão para começar';
@@ -3124,6 +3144,7 @@ function lpStopAllSrc(){
   if(_LP.clockRaf){cancelAnimationFrame(_LP.clockRaf);_LP.clockRaf=null;}
 }
 function lpPlayAll(){
+  _lpAudioSession('playback');
   _LP.startTime=_LP.ctx.currentTime;
   for(const t of _LP.tracks)_lpStartTrackSrc(t);
   _lpClock();
@@ -3131,27 +3152,29 @@ function lpPlayAll(){
 
 /* ---- botão grande / máquina de estados ---- */
 async function lpBig(){
-  if(!await lpEnsureMic())return;
   const S=_LP.state;
   if(S==='idle'){
+    if(!await lpAcquireMic())return;
     _LP.state='recbase';_LP.recT0=_LP.ctx.currentTime;_lpStartRec(true);
     document.getElementById('lpMeterLbl').textContent='● gravando base…';
     _lpSetBig();_lpClock();
   }else if(S==='recbase'){
     _lpCloseBase();
   }else if(S==='playing'){
-    _LP.state='overdub';_lpStartRec(false);
+    if(!await lpAcquireMic())return;
     document.getElementById('lpMeterLbl').textContent='● sobrepondo camada…';
+    _LP.state='overdub';_lpStartRec(false);
     _lpSetBig();
   }else if(S==='overdub'){
     _lpCloseOverdub();
   }else if(S==='stopped'){
+    if(!await lpEnsureCtx())return;
     lpPlayAll();_LP.state='playing';_lpSetBig();
   }
 }
 function _lpCloseBase(){
-  _lpStopRecNodes();
   const chunks=_LP.recChunks;_LP.recChunks=null;
+  lpReleaseMic();   // libera o mic ANTES de tocar → saída volta ao alto-falante
   let total=0;for(const c of chunks)total+=c.length;
   if(total<_LP.sr*0.25){_LP.state='idle';_lpSetBig();_lpToast('Muito curto — tente de novo');return;}
   const base=new Float32Array(total);let off=0;for(const c of chunks){base.set(c,off);off+=c.length;}
@@ -3161,11 +3184,13 @@ function _lpCloseBase(){
   const t=_lpTrackObj(base,'Base');
   _LP.tracks.push(t);_lpStartTrackSrc(t);
   _LP.state='playing';_lpSetBig();_lpClock();_lpRenderLayers();
+  document.getElementById('lpMeterLbl').textContent='tocando 🔊';
 }
 function _lpCloseOverdub(){
-  _lpStopRecNodes();
   const layer=_LP.recLayer;_LP.recLayer=null;
+  lpReleaseMic();   // libera o mic → reprodução volta ao alto-falante estéreo
   _LP.state='playing';
+  document.getElementById('lpMeterLbl').textContent='tocando 🔊';
   let peak=0;for(let i=0;i<layer.length;i++){const a=Math.abs(layer[i]);if(a>peak)peak=a;}
   if(peak<0.003){_lpSetBig();_lpToast('Camada vazia — descartada');return;}
   const t=_lpTrackObj(layer,'Camada '+_LP.tracks.length);
@@ -3177,8 +3202,10 @@ function _lpCloseOverdub(){
 function lpTogglePlay(){
   if(_LP.state==='overdub')_lpCloseOverdub();
   if(!_LP.tracks.length)return;
-  if(_LP.state==='playing'){lpStopAllSrc();_LP.state='stopped';}
-  else if(_LP.state==='stopped'){lpPlayAll();_LP.state='playing';}
+  if(_LP.state==='playing'){lpStopAllSrc();_LP.state='stopped';
+    const ml=document.getElementById('lpMeterLbl');if(ml)ml.textContent='parado';}
+  else if(_LP.state==='stopped'){lpPlayAll();_LP.state='playing';
+    const ml=document.getElementById('lpMeterLbl');if(ml)ml.textContent='tocando 🔊';}
   _lpSetBig();
 }
 function lpUndo(){
@@ -3360,8 +3387,8 @@ async function _lpRenderSalvas(){
 }
 async function lpCarregar(id){
   const s=await lpGet(id);if(!s)return;
-  if(!await lpEnsureMic())return;
-  if(_LP.state==='overdub'||_LP.state==='recbase')_lpStopRecNodes();
+  if(!await lpEnsureCtx())return;
+  if(_LP.state==='overdub'||_LP.state==='recbase')lpReleaseMic();
   lpStopAllSrc();
   const ctx=_LP.ctx;
   _LP.tracks=[];_LP.redo=[];_LP.loopLen=0;_LP.loopDur=0;

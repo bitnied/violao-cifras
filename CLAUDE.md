@@ -111,9 +111,17 @@ montar uma banda inteira. Substituiu o gravador de backing tracks antigo.
 - **Exportar mix:** soma as camadas (respeitando mudo/volume) de uma volta do loop
   e baixa um **WAV**.
 - **Ganho/Reduzir ruído** reaproveitados do gravador (gate simples).
-- Requer **HTTPS** (ou localhost) para o microfone. No iOS, mic + playback ao mesmo
-  tempo pode cair no viva-voz baixo/earpiece **sem fones** — por isso a dica de usar
-  fones. Ainda usa `ScriptProcessor` (deprecado, mas funciona em todo lugar/iOS).
+- Requer **HTTPS** (ou localhost) para o microfone. Ainda usa `ScriptProcessor`
+  (deprecado, mas funciona em todo lugar/iOS).
+- **Rota de áudio no iOS (importante):** enquanto o `getUserMedia` está aberto, o
+  Safari roteia a saída para o auscultador (rota de "ligação"), baixinho. Por isso
+  o mic é **aberto só durante a gravação** (`lpAcquireMic`) e **liberado assim que a
+  camada fecha** (`lpReleaseMic`) — aí a reprodução do loop volta ao alto-falante
+  estéreo (rota de mídia). O contexto (`lpEnsureCtx`) fica vivo o tempo todo.
+  `navigator.audioSession.type` (`'play-and-record'` ao gravar, `'playback'` ao
+  tocar) reforça a rota quando existe (iOS 16.4+). **Durante o overdub** o mic está
+  aberto, então o loop sai pelo auscultador nesse momento — use **fones** para
+  monitorar (aí tudo sai alto e sem vazamento do alto-falante para a gravação).
 
 ## Deploy (publicado)
 - **Repo:** github.com/bitnied/violao-cifras (público, branch `main`, `noindex` no HTML).
