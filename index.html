@@ -253,9 +253,8 @@
     border-radius:50%; background:#fff;}
   .lp-big.rec .lp-big-ico, .lp-big.over .lp-big-ico{width:40px; height:40px;
     border-radius:9px; background:#fff;}
-  .lp-big.stop .lp-big-ico{width:0; height:0; margin-left:8px; background:transparent;
-    border-style:solid; border-width:22px 0 22px 38px;
-    border-color:transparent transparent transparent var(--fg);}
+  .lp-big.stop .lp-big-ico{width:46px; height:46px; background:var(--fg);
+    clip-path:polygon(24% 12%, 24% 88%, 86% 50%);}
   @keyframes lp-pulse{0%,100%{box-shadow:inset 0 3px 12px rgba(255,255,255,.18), inset 0 -8px 18px rgba(0,0,0,.3), 0 0 0 0 rgba(229,57,53,.5);}
     50%{box-shadow:inset 0 3px 12px rgba(255,255,255,.18), inset 0 -8px 18px rgba(0,0,0,.3), 0 0 0 24px rgba(229,57,53,0);}}
   .lp-clock{text-align:center; min-height:38px; font-variant-numeric:tabular-nums;}
@@ -344,18 +343,28 @@
     pointer-events:none;}
   .lp-crop-region{position:absolute; top:0; bottom:0; pointer-events:none;
     box-shadow:inset 0 0 0 9999px rgba(255,204,85,.07);}
-  /* alça: linha fina (não cobre a onda) + pega no topo */
-  .lp-crop-h{position:absolute; top:0; bottom:0; width:46px; margin-left:-23px;
-    cursor:ew-resize; touch-action:none; z-index:3;}
+  /* alça de corte: linha cheia (visual) + pega no TOPO (área de toque) */
+  .lp-crop-h{position:absolute; top:0; height:36px; width:46px; margin-left:-23px;
+    cursor:ew-resize; touch-action:none; z-index:4;}
   .lp-crop-h::after{content:''; position:absolute; left:50%; margin-left:-1px;
-    top:0; bottom:0; width:2px; background:var(--accent);
-    box-shadow:0 0 6px rgba(255,204,85,.7);}
+    top:0; height:140px; width:2px; background:var(--accent);
+    box-shadow:0 0 6px rgba(255,204,85,.7); pointer-events:none;}
   .lp-crop-grip{position:absolute; left:50%; top:0; transform:translateX(-50%);
-    width:30px; height:24px; border-radius:0 0 11px 11px; background:var(--accent);
+    width:32px; height:26px; border-radius:0 0 11px 11px; background:var(--accent);
     color:#111; display:flex; align-items:center; justify-content:center;
     font-size:15px; font-weight:800; box-shadow:0 3px 8px rgba(0,0,0,.55);}
-  .lp-crop-playhead{position:absolute; top:0; bottom:0; width:2px; background:#fff;
-    pointer-events:none; opacity:0; z-index:2;}
+  /* linha de PLAY arrastável: linha branca + pega embaixo (não colide c/ alças) */
+  .lp-crop-playhead{position:absolute; bottom:0; height:36px; width:46px; margin-left:-23px;
+    cursor:ew-resize; touch-action:none; z-index:5;}
+  .lp-crop-playhead::after{content:''; position:absolute; left:50%; margin-left:-1px;
+    bottom:0; height:140px; width:2px; background:#fff;
+    box-shadow:0 0 7px rgba(255,255,255,.8); pointer-events:none;}
+  .lp-crop-ph-grip{position:absolute; left:50%; bottom:0; transform:translateX(-50%);
+    width:34px; height:24px; border-radius:11px 11px 0 0; background:#fff;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 -3px 8px rgba(0,0,0,.55);}
+  .lp-crop-ph-grip::before{content:''; width:0; height:0; border-style:solid;
+    border-width:6px 0 6px 10px; border-color:transparent transparent transparent #111;}
   .lp-crop-times{display:flex; align-items:center; justify-content:center; gap:8px;
     margin:13px 0 2px; font-variant-numeric:tabular-nums; font-size:14px; color:var(--fg);}
   .lp-crop-dur{color:var(--accent); font-weight:700;}
@@ -546,15 +555,15 @@
 <div class="lp-crop-ov oculto" id="lpCropOv">
   <div class="lp-crop-card">
     <div class="lp-crop-title">✂️ Cortar loop</div>
-    <div class="lp-crop-sub">Arraste as alças para escolher o trecho que fica. O resto é removido de todas as camadas.</div>
+    <div class="lp-crop-sub">Alças amarelas (em cima) = trecho que fica. Arraste a linha branca (embaixo) para ouvir de qualquer ponto — ex.: conferir o final.</div>
     <div class="lp-crop-wrap" id="lpCropWrap">
       <canvas class="lp-crop-wave" id="lpCropWave"></canvas>
       <div class="lp-crop-mask" id="lpCropMaskL"></div>
       <div class="lp-crop-mask" id="lpCropMaskR"></div>
       <div class="lp-crop-region" id="lpCropRegion"></div>
-      <div class="lp-crop-playhead" id="lpCropPlayhead"></div>
       <div class="lp-crop-h" id="lpCropHA"><div class="lp-crop-grip">‹</div></div>
       <div class="lp-crop-h" id="lpCropHB"><div class="lp-crop-grip">›</div></div>
+      <div class="lp-crop-playhead" id="lpCropPlayhead"><div class="lp-crop-ph-grip"></div></div>
     </div>
     <div class="lp-crop-times"><span id="lpCropTA">0:00</span><span>—</span><span id="lpCropTB">0:00</span><span class="lp-crop-dur" id="lpCropDur"></span></div>
     <div class="lp-crop-actions">
@@ -2287,7 +2296,7 @@ function abrirPorTitulo(t){
 
 function montaLista(){
   const el = document.getElementById('lista');
-  let html = `<div class="home-top"><h1>VV <span class="ver">v3.2</span></h1>
+  let html = `<div class="home-top"><h1>VV <span class="ver">v3.3</span></h1>
     <button class="afinador-btn" onclick="abrirLooper()">🔁 Looper</button>
     <button class="afinador-btn" onclick="abrirAfinador()">🎙️ Afinador</button></div>`;
   listaOrdenada().forEach(m=>{
@@ -3474,11 +3483,12 @@ function lpAbrirCrop(){
   if(_LP.state==='overdub'||_LP.state==='recbase'){_lpToast('Feche a camada antes');return;}
   const wasPlaying=(_LP.state==='playing');
   lpStopAllSrc();
-  _LP.crop={a:0,b:1,mix:_lpCropMix(),prevSrc:null,prevRaf:null,prevT0:0,dragging:null,wasPlaying};
+  _LP.crop={a:0,b:1,play:0,mix:_lpCropMix(),prevSrc:null,prevRaf:null,prevT0:0,prevStart:0,dragging:null,wasPlaying};
   document.getElementById('lpCropOv').classList.remove('oculto');
-  const ha=document.getElementById('lpCropHA'),hb=document.getElementById('lpCropHB');
+  const ha=document.getElementById('lpCropHA'),hb=document.getElementById('lpCropHB'),phd=document.getElementById('lpCropPlayhead');
   ha.onpointerdown=e=>{_LP.crop.dragging='a';e.preventDefault();};
   hb.onpointerdown=e=>{_LP.crop.dragging='b';e.preventDefault();};
+  phd.onpointerdown=e=>{_LP.crop.dragging='play';lpCropStopPreview();e.preventDefault();};
   _lpCropMove=e=>{
     if(!_LP.crop||!_LP.crop.dragging)return;
     if(e.cancelable)e.preventDefault();
@@ -3487,10 +3497,15 @@ function lpAbrirCrop(){
     let f=Math.max(0,Math.min(1,(cx-r.left)/r.width));
     const gap=Math.max(0.02,(_LP.sr*0.1)/_LP.loopLen);
     if(_LP.crop.dragging==='a')_LP.crop.a=Math.min(f,_LP.crop.b-gap);
-    else _LP.crop.b=Math.max(f,_LP.crop.a+gap);
+    else if(_LP.crop.dragging==='b')_LP.crop.b=Math.max(f,_LP.crop.a+gap);
+    else{_LP.crop.play=f;document.getElementById('lpCropPlayhead').style.left=(f*100)+'%';return;}
     _lpCropLayout();_lpCropDraw();
   };
-  _lpCropUp=()=>{if(_LP.crop)_LP.crop.dragging=null;};
+  _lpCropUp=()=>{
+    if(!_LP.crop)return;
+    const was=_LP.crop.dragging;_LP.crop.dragging=null;
+    if(was==='play')_lpCropPlayFrom(_LP.crop.play);   // soltou a linha de play → ouve dali
+  };
   document.addEventListener('pointermove',_lpCropMove,{passive:false});
   document.addEventListener('pointerup',_lpCropUp);
   requestAnimationFrame(()=>{_lpCropDraw();_lpCropLayout();});
@@ -3523,36 +3538,43 @@ function _lpCropLayout(){
   mr.style.left=(b*100)+'%';mr.style.width=((1-b)*100)+'%';
   reg.style.left=(a*100)+'%';reg.style.width=((b-a)*100)+'%';
   ha.style.left=(a*100)+'%';hb.style.left=(b*100)+'%';
+  const phd=document.getElementById('lpCropPlayhead');if(phd)phd.style.left=((_LP.crop.play||0)*100)+'%';
   document.getElementById('lpCropTA').textContent=_gFmt(a*_LP.loopDur);
   document.getElementById('lpCropTB').textContent=_gFmt(b*_LP.loopDur);
   document.getElementById('lpCropDur').textContent='('+_gFmt((b-a)*_LP.loopDur)+')';
 }
-function lpCropPreview(){
+function lpCropPreview(){   // botão Ouvir: toca/pausa a partir da linha de play
   if(!_LP.crop||!_LP.ctx)return;
   if(_LP.crop.prevSrc){lpCropStopPreview();return;}
+  _lpCropPlayFrom(_LP.crop.play||0);
+}
+function _lpCropPlayFrom(frac){   // toca o loop inteiro a partir de 'frac' (permite ouvir o fim)
+  if(!_LP.crop||!_LP.ctx)return;
+  _lpCropStopSrc();
   const ctx=_LP.ctx;
   const ab=ctx.createBuffer(1,_LP.loopLen,_LP.sr);ab.getChannelData(0).set(_LP.crop.mix);
-  const src=ctx.createBufferSource();src.buffer=ab;src.loop=true;
-  const a=_LP.crop.a*_LP.loopDur,b=_LP.crop.b*_LP.loopDur;
-  src.loopStart=a;src.loopEnd=b;src.connect(ctx.destination);
-  src.start(0,a);
-  _LP.crop.prevSrc=src;_LP.crop.prevT0=ctx.currentTime;
-  document.getElementById('lpCropPrev').textContent='⏹ Parar';
-  const ph=document.getElementById('lpCropPlayhead');if(ph)ph.style.opacity='1';
-  const seg=b-a;
+  const src=ctx.createBufferSource();src.buffer=ab;src.loop=true;src.connect(ctx.destination);
+  src.start(0,frac*_LP.loopDur);
+  _LP.crop.prevSrc=src;_LP.crop.prevT0=ctx.currentTime;_LP.crop.prevStart=frac;
+  const pv=document.getElementById('lpCropPrev');if(pv)pv.textContent='⏹ Parar';
+  const ph=document.getElementById('lpCropPlayhead');
   const tick=()=>{
     if(!_LP.crop||!_LP.crop.prevSrc)return;
-    const el=((ctx.currentTime-_LP.crop.prevT0)%seg);
-    const frac=_LP.crop.a+el/_LP.loopDur;
-    if(ph)ph.style.left=(frac*100)+'%';
+    if(_LP.crop.dragging!=='play'){
+      const el=(ctx.currentTime-_LP.crop.prevT0);
+      const f=((_LP.crop.prevStart*_LP.loopDur+el)%_LP.loopDur)/_LP.loopDur;
+      _LP.crop.play=f;if(ph)ph.style.left=(f*100)+'%';
+    }
     _LP.crop.prevRaf=requestAnimationFrame(tick);
   };
   tick();
 }
-function lpCropStopPreview(){
+function _lpCropStopSrc(){
   if(_LP.crop&&_LP.crop.prevSrc){try{_LP.crop.prevSrc.stop();}catch(e){}try{_LP.crop.prevSrc.disconnect();}catch(e){}_LP.crop.prevSrc=null;}
   if(_LP.crop&&_LP.crop.prevRaf){cancelAnimationFrame(_LP.crop.prevRaf);_LP.crop.prevRaf=null;}
-  const ph=document.getElementById('lpCropPlayhead');if(ph)ph.style.opacity='0';
+}
+function lpCropStopPreview(){
+  _lpCropStopSrc();
   const pv=document.getElementById('lpCropPrev');if(pv)pv.textContent='▶ Ouvir';
 }
 function lpCropClose(){

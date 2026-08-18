@@ -111,6 +111,10 @@ montar uma banda inteira. Substituiu o gravador de backing tracks antigo.
   seleção em loop). "Salvar corte" fatia **todas as camadas** para `[a,b]` e redefine
   `loopLen`/`loopDur` (destrutivo no buffer em memória — avisa p/ salvar a sessão).
   Funções `lpAbrirCrop`/`_lpCropDraw`/`_lpCropLayout`/`lpCropPreview`/`lpCropSave`.
+  Tem uma **linha de play branca arrastável** (pega embaixo, separada das alças de
+  corte que ficam em cima): arrasta e ao soltar toca o loop inteiro a partir dali
+  (`_lpCropPlayFrom`) — dá pra conferir o final sem ouvir tudo. As alças e a linha de
+  play têm áreas de toque em pontas opostas (topo x base) pra não colidirem.
 - **Camadas:** cada uma com mini-waveform, volume, mudo e apagar (apagar a base = limpar).
 - **Botão de gravar:** disco vermelho grande estilo REC de verdade (gradiente + brilho
   interno + glow). O ícone é **desenhado em CSS** (círculo/quadrado/triângulo via
