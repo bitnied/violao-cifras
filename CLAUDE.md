@@ -105,7 +105,16 @@ montar uma banda inteira. Substituiu o gravador de backing tracks antigo.
 - **Sincronia (latência):** slider 0–250 ms (`_LP.sync`, default 60 ms) puxa a
   camada gravada para trás e corrige o atraso do round-trip do navegador.
 - **Transporte:** ▶/⏸ tocar-parar, ↩ desfazer camada, ↪ refazer, 🗑 limpar tudo.
+- **Cortar loop (✂️):** editor **modal** (abre só ao clicar em "Cortar loop", não fica
+  na tela). Mostra a **forma de onda grande** do mix, duas alças arrastáveis com região
+  destacada e o resto escurecido, tempos ao vivo e **prévia** (▶ Ouvir toca só a
+  seleção em loop). "Salvar corte" fatia **todas as camadas** para `[a,b]` e redefine
+  `loopLen`/`loopDur` (destrutivo no buffer em memória — avisa p/ salvar a sessão).
+  Funções `lpAbrirCrop`/`_lpCropDraw`/`_lpCropLayout`/`lpCropPreview`/`lpCropSave`.
 - **Camadas:** cada uma com mini-waveform, volume, mudo e apagar (apagar a base = limpar).
+- **Botão de gravar:** disco vermelho grande estilo REC de verdade (gradiente + brilho
+  interno + glow). Estados: vermelho vivo = vai gravar (base/sobrepor), vermelho escuro
+  pulsando + ⏹ = gravando, cinza + ▶ = parado.
 - **Persistência:** sessões salvas em IndexedDB (`gravador_db` v2, store `loops`;
   cada camada vira um WAV mono). Recarregar retoma de onde parou (estado `stopped`).
 - **Exportar mix:** soma as camadas (respeitando mudo/volume) de uma volta do loop
