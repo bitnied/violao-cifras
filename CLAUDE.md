@@ -113,8 +113,14 @@ montar uma banda inteira. Substituiu o gravador de backing tracks antigo.
   Funções `lpAbrirCrop`/`_lpCropDraw`/`_lpCropLayout`/`lpCropPreview`/`lpCropSave`.
 - **Camadas:** cada uma com mini-waveform, volume, mudo e apagar (apagar a base = limpar).
 - **Botão de gravar:** disco vermelho grande estilo REC de verdade (gradiente + brilho
-  interno + glow). Estados: vermelho vivo = vai gravar (base/sobrepor), vermelho escuro
-  pulsando + ⏹ = gravando, cinza + ▶ = parado.
+  interno + glow). O ícone é **desenhado em CSS** (círculo/quadrado/triângulo via
+  `.lp-big-ico` + classe de estado) — nada de emoji `⏺/⏹/▶`, que o iOS renderiza como
+  emoji e quebrava o layout. Estados: vermelho vivo = vai gravar, vermelho escuro
+  pulsando = gravando, cinza = parado.
+- **Loop sem vão no reinício:** ao fechar a base, `_lpTrimHead` **apara o silêncio
+  inicial** (latência do mic + reação) que causava atraso a cada volta do loop.
+- **Anti-estouro:** sensibilidade padrão **3×** (era 6) e **soft-clip `Math.tanh`**
+  no lugar do corte duro — arredonda picos sem distorcer feio.
 - **Persistência:** sessões salvas em IndexedDB (`gravador_db` v2, store `loops`;
   cada camada vira um WAV mono). Recarregar retoma de onde parou (estado `stopped`).
 - **Exportar mix:** soma as camadas (respeitando mudo/volume) de uma volta do loop
