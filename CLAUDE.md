@@ -90,19 +90,30 @@ Resposta, Anna Júlia.
 - Músicas de fingerstyle/tab (Blackbird, See You, About a Girl etc.): letra no
   Cifra, tablatura no modo Solo.
 
-## Gravador (novo)
-- Seção acessível pelo botão **⏺ Gravador** na home.
-- **Gravar** áudio do microfone (MediaRecorder API).
-- **Playlist** de gravações armazenadas em IndexedDB (no sandbox do navegador —
-  cada dispositivo tem as suas; sem PWA, iOS pode limpar após 7 dias de inatividade).
-- **Waveform** visual do áudio com progresso ao tocar.
-- **Loop** para repetição contínua.
-- **Tune** (detune ±12 semitons) para ajustar afinação do backing track.
-- **Recorte** não-destrutivo (trim start/end) — mantém o blob original.
-- **Renomear** gravações.
-- **Exportar** como arquivo (WAV se recortado, formato original caso contrário).
-- **Apagar** gravações com confirmação.
-- Funciona em desktop e mobile. Requer HTTPS (ou localhost) para acesso ao microfone.
+## Looper (v3.0 — era "Gravador")
+Estação de loop estilo pedal (Boss RC): grava a **base**, ela fica rodando em
+loop, e você vai **sobrepondo camadas** (violão, voz, percussão…) ao vivo até
+montar uma banda inteira. Substituiu o gravador de backing tracks antigo.
+- Acessível pelo botão **🔁 Looper** na home.
+- **Botão grande central** com máquina de estados (uma cor/rótulo por estado):
+  `idle → recbase (Fechar loop) → playing (Sobrepor) → overdub (Fechar camada)`
+  e `stopped (Continuar)`. A **primeira gravação define o tamanho do loop**.
+- **Motor de áudio** (Web Audio, ScriptProcessor p/ captura + AudioBufferSourceNodes
+  em loop): cada camada é um `Float32Array` do tamanho do loop, tocadas juntas e
+  **alinhadas pela fase** do loop. Overdub grava numa camada nova, escrita na
+  posição de fase certa (com wrap e soma) e compensada por latência.
+- **Sincronia (latência):** slider 0–250 ms (`_LP.sync`, default 60 ms) puxa a
+  camada gravada para trás e corrige o atraso do round-trip do navegador.
+- **Transporte:** ▶/⏸ tocar-parar, ↩ desfazer camada, ↪ refazer, 🗑 limpar tudo.
+- **Camadas:** cada uma com mini-waveform, volume, mudo e apagar (apagar a base = limpar).
+- **Persistência:** sessões salvas em IndexedDB (`gravador_db` v2, store `loops`;
+  cada camada vira um WAV mono). Recarregar retoma de onde parou (estado `stopped`).
+- **Exportar mix:** soma as camadas (respeitando mudo/volume) de uma volta do loop
+  e baixa um **WAV**.
+- **Ganho/Reduzir ruído** reaproveitados do gravador (gate simples).
+- Requer **HTTPS** (ou localhost) para o microfone. No iOS, mic + playback ao mesmo
+  tempo pode cair no viva-voz baixo/earpiece **sem fones** — por isso a dica de usar
+  fones. Ainda usa `ScriptProcessor` (deprecado, mas funciona em todo lugar/iOS).
 
 ## Deploy (publicado)
 - **Repo:** github.com/bitnied/violao-cifras (público, branch `main`, `noindex` no HTML).
