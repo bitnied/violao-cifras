@@ -105,6 +105,11 @@ montar uma banda inteira. Substituiu o gravador de backing tracks antigo.
 - **Sincronia (latência):** slider 0–250 ms (`_LP.sync`, default 60 ms) puxa a
   camada gravada para trás e corrige o atraso do round-trip do navegador.
 - **Transporte:** ▶/⏸ tocar-parar, ↩ desfazer camada, ↪ refazer, 🗑 limpar tudo.
+- **Barra de progresso = scrubber:** com um loop pronto, a barra (`#lpProgWrap`, com
+  thumb) é tocável/arrastável para avançar/retroceder — `lpProgDown`→`lpSeek(frac)`
+  reposiciona `startTime = now - frac*loopDur` e reinicia as sources na fase nova
+  (toca a partir dali). Durante o arraste, `_lpSeeking` congela a atualização visual
+  vinda do relógio. Bloqueado enquanto grava (recbase/overdub).
 - **Cortar loop (✂️):** editor **modal** (abre só ao clicar em "Cortar loop", não fica
   na tela). Mostra a **forma de onda grande** do mix, duas alças arrastáveis com região
   destacada e o resto escurecido, tempos ao vivo e **prévia** (▶ Ouvir toca só a

@@ -260,9 +260,18 @@
   .lp-clock{text-align:center; min-height:38px; font-variant-numeric:tabular-nums;}
   .lp-clock #lpClock{font-size:21px; font-weight:700; color:var(--fg);}
   .lp-clock-sub{display:block; font-size:12px; color:var(--muted); margin-top:1px; min-height:15px;}
-  .lp-progwrap{width:100%; max-width:360px; height:6px; background:var(--bg2);
-    border:1px solid var(--line); border-radius:4px; margin:4px auto 2px; overflow:hidden;}
-  .lp-prog{height:100%; width:0; background:var(--accent);}
+  /* barra de progresso = também scrubber (toque/arraste p/ avançar/retroceder) */
+  .lp-progwrap{position:relative; width:100%; max-width:360px; height:24px;
+    margin:2px auto; display:flex; align-items:center; touch-action:none; cursor:pointer;}
+  .lp-progwrap::before{content:''; position:absolute; left:0; right:0; height:7px;
+    background:var(--bg2); border:1px solid var(--line); border-radius:4px;}
+  .lp-prog{position:absolute; left:0; height:7px; width:0; background:var(--accent);
+    border-radius:4px;}
+  .lp-prog-thumb{position:absolute; left:0; width:18px; height:18px; border-radius:50%;
+    background:var(--accent); box-shadow:0 1px 5px rgba(0,0,0,.55); transform:translateX(-50%);
+    display:none;}
+  .lp-progwrap.on .lp-prog-thumb{display:block;}
+  .lp-progwrap.on::before{background:var(--bg);}
   .lp-transport{display:flex; justify-content:center; gap:10px; margin:14px auto 8px; max-width:360px;}
   .lp-tb{width:58px; height:50px; border:none; border-radius:13px; background:var(--bg2);
     color:var(--fg); font-size:20px;}
@@ -503,7 +512,7 @@
         <span class="lp-big-ico" id="lpBigIco">⏺</span>
         <span class="lp-big-lbl" id="lpBigLbl">Gravar base</span>
       </button>
-      <div class="lp-progwrap"><div class="lp-prog" id="lpProg"></div></div>
+      <div class="lp-progwrap" id="lpProgWrap" onpointerdown="lpProgDown(event)"><div class="lp-prog" id="lpProg"></div><div class="lp-prog-thumb" id="lpProgThumb"></div></div>
       <div class="lp-clock"><span id="lpClock">0:00</span><span class="lp-clock-sub" id="lpClockSub"></span></div>
     </div>
 
@@ -2296,7 +2305,7 @@ function abrirPorTitulo(t){
 
 function montaLista(){
   const el = document.getElementById('lista');
-  let html = `<div class="home-top"><h1>VV <span class="ver">v3.3</span></h1>
+  let html = `<div class="home-top"><h1>VV <span class="ver">v3.4</span></h1>
     <button class="afinador-btn" onclick="abrirLooper()">🔁 Looper</button>
     <button class="afinador-btn" onclick="abrirAfinador()">🎙️ Afinador</button></div>`;
   listaOrdenada().forEach(m=>{
@@ -3335,7 +3344,7 @@ function lpLimpar(){
 /* ---- relógio / progresso do loop ---- */
 function _lpClock(){
   if(_LP.clockRaf)cancelAnimationFrame(_LP.clockRaf);
-  const el=document.getElementById('lpClock'),sub=document.getElementById('lpClockSub'),prog=document.getElementById('lpProg');
+  const el=document.getElementById('lpClock'),sub=document.getElementById('lpClockSub'),prog=document.getElementById('lpProg'),thumb=document.getElementById('lpProgThumb');
   const tick=()=>{
     const ctx=_LP.ctx;if(!ctx){return;}
     if(_LP.state==='recbase'){
@@ -3349,11 +3358,52 @@ function _lpClock(){
       if(el)el.textContent=_gFmt(phase)+' / '+_gFmt(_LP.loopDur);
       const cyc=Math.floor(rel/_LP.loopDur)+1;
       if(sub)sub.textContent=(_LP.state==='overdub'?'● sobrepondo · ':'')+'volta '+cyc;
-      if(prog)prog.style.width=(phase/_LP.loopDur*100)+'%';
+      if(!_lpSeeking){const pc=phase/_LP.loopDur*100;if(prog)prog.style.width=pc+'%';if(thumb)thumb.style.left=pc+'%';}
     }
     _LP.clockRaf=requestAnimationFrame(tick);
   };
   tick();
+}
+
+/* ---- scrubber: tocar/arrastar a barra de progresso p/ avançar/retroceder ---- */
+let _lpSeeking=false,_lpSeekFrac=0,_lpSeekMove=null,_lpSeekUp=null;
+function _lpProgFrac(e){
+  const wrap=document.getElementById('lpProgWrap'),r=wrap.getBoundingClientRect();
+  const cx=e.touches?e.touches[0].clientX:e.clientX;
+  return Math.max(0,Math.min(1,(cx-r.left)/r.width));
+}
+function _lpSeekShow(f){
+  const pc=f*100;
+  const prog=document.getElementById('lpProg'),thumb=document.getElementById('lpProgThumb'),el=document.getElementById('lpClock');
+  if(prog)prog.style.width=pc+'%';if(thumb)thumb.style.left=pc+'%';
+  if(el&&_LP.loopDur)el.textContent=_gFmt(f*_LP.loopDur)+' / '+_gFmt(_LP.loopDur);
+}
+function lpProgDown(e){
+  if(!_LP.tracks.length||!_LP.loopDur||!_LP.ctx)return;
+  if(_LP.state==='overdub'||_LP.state==='recbase')return;   // não mexe durante gravação
+  _lpSeeking=true;if(e.cancelable)e.preventDefault();
+  _lpSeekFrac=_lpProgFrac(e);_lpSeekShow(_lpSeekFrac);
+  _lpSeekMove=ev=>{if(!_lpSeeking)return;if(ev.cancelable)ev.preventDefault();_lpSeekFrac=_lpProgFrac(ev);_lpSeekShow(_lpSeekFrac);};
+  _lpSeekUp=()=>{
+    if(!_lpSeeking)return;_lpSeeking=false;
+    document.removeEventListener('pointermove',_lpSeekMove);
+    document.removeEventListener('pointerup',_lpSeekUp);
+    _lpSeekMove=_lpSeekUp=null;
+    lpSeek(_lpSeekFrac);
+  };
+  document.addEventListener('pointermove',_lpSeekMove,{passive:false});
+  document.addEventListener('pointerup',_lpSeekUp);
+}
+function lpSeek(frac){
+  if(!_LP.tracks.length||!_LP.loopDur||!_LP.ctx)return;
+  frac=Math.max(0,Math.min(0.9999,frac));
+  const p=frac*_LP.loopDur;
+  for(const t of _LP.tracks){if(t.src){try{t.src.stop();}catch(e){}try{t.src.disconnect();}catch(e){}t.src=null;t.gain=null;}}
+  if(_LP.clockRaf){cancelAnimationFrame(_LP.clockRaf);_LP.clockRaf=null;}
+  _LP.startTime=_LP.ctx.currentTime-p;      // faz a fase atual virar 'p'
+  for(const t of _LP.tracks)_lpStartTrackSrc(t);
+  _LP.state='playing';_lpSetBig();_lpClock();
+  const ml=document.getElementById('lpMeterLbl');if(ml)ml.textContent='tocando 🔊';
 }
 
 /* ---- estado visual dos botões ---- */
@@ -3379,6 +3429,8 @@ function _lpSetBig(){
   if(redo)redo.disabled=!_LP.redo.length||S==='overdub'||S==='recbase';
   if(clear)clear.disabled=!has&&S==='idle';
   const sess=document.getElementById('lpSess');if(sess)sess.style.display=has?'flex':'none';
+  const pw=document.getElementById('lpProgWrap');
+  if(pw)pw.classList.toggle('on',has&&S!=='recbase');   // scrubber ativo só com loop pronto
 }
 
 /* ---- lista de camadas ---- */
