@@ -98,10 +98,18 @@ montar uma banda inteira. Substituiu o gravador de backing tracks antigo.
 - **Botão grande central** com máquina de estados (uma cor/rótulo por estado):
   `idle → recbase (Fechar loop) → playing (Sobrepor) → overdub (Fechar camada)`
   e `stopped (Continuar)`. A **primeira gravação define o tamanho do loop**.
-- **Motor de áudio** (Web Audio, ScriptProcessor p/ captura + AudioBufferSourceNodes
+- **Motor de áudio** (Web Audio, **AudioWorklet** p/ captura + AudioBufferSourceNodes
   em loop): cada camada é um `Float32Array` do tamanho do loop, tocadas juntas e
   **alinhadas pela fase** do loop. Overdub grava numa camada nova, escrita na
   posição de fase certa (com wrap e soma) e compensada por latência.
+- **Captura por AudioWorklet (anti-craquelado):** a gravação roda num
+  `AudioWorkletProcessor` (`rec-processor`, fonte inline em `_LP_WORKLET_SRC`,
+  carregado via Blob URL) na **thread de áudio** — não engasga quando a tela/JS
+  está ocupada (medidor, relógio, playback do overdub), então acabou o craquelado
+  do antigo `ScriptProcessor`. O worklet faz ganho+gate+soft-clip e devolve o buffer
+  no `stop` (`_lpStopRec` é Promise). **Fallback** automático pro `ScriptProcessor`
+  se `audioWorklet` não existir. Por isso `_lpCloseBase`/`_lpCloseOverdub`/
+  `lpBig`/`lpTogglePlay` são `async`.
 - **Sincronia (latência):** slider 0–250 ms (`_LP.sync`, default 60 ms) puxa a
   camada gravada para trás e corrige o atraso do round-trip do navegador.
 - **Transporte:** ▶/⏸ tocar-parar, ↩ desfazer camada, ↪ refazer, 🗑 limpar tudo.

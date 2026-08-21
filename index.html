@@ -2305,7 +2305,7 @@ function abrirPorTitulo(t){
 
 function montaLista(){
   const el = document.getElementById('lista');
-  let html = `<div class="home-top"><h1>VV <span class="ver">v3.4</span></h1>
+  let html = `<div class="home-top"><h1>VV <span class="ver">v3.5</span></h1>
     <button class="afinador-btn" onclick="abrirLooper()">🔁 Looper</button>
     <button class="afinador-btn" onclick="abrirAfinador()">🎙️ Afinador</button></div>`;
   listaOrdenada().forEach(m=>{
@@ -3047,6 +3047,7 @@ const _LP={
   sr:0, loopLen:0, loopDur:0, startTime:0,
   tracks:[], redo:[],
   recProc:null, recSrc:null, recSink:null,
+  recNode:null, recResolve:null, workletLoaded:false, workletUrl:null,
   recChunks:null, recLayer:null, recWritePos:0, recBase:false,
   recT0:0, clockRaf:null, env:0, gg:0,
   gain:6, gate:false, sync:0.06,
@@ -3114,6 +3115,50 @@ function lpDel(id){return lpDB().then(db=>new Promise((ok,err)=>{const r=db.tran
 function _lpAudioSession(type){
   try{ if(navigator.audioSession) navigator.audioSession.type=type; }catch(e){}
 }
+/* Worklet de captura: roda na THREAD DE ÁUDIO (não engasga com a tela → sem
+   craquelado). Faz ganho + gate + soft-clip e acumula a base, ou escreve a
+   camada de overdub na posição de fase certa (com wrap). Devolve o buffer no stop. */
+const _LP_WORKLET_SRC=`
+class RecProcessor extends AudioWorkletProcessor{
+  constructor(){super();
+    this.mode='idle';this.chunks=[];this.layer=null;this.loopLen=0;this.wp=0;
+    this.gain=1;this.gate=false;this.env=0;this.gg=0;
+    this.port.onmessage=(e)=>{const d=e.data;
+      if(d.cmd==='start'){this.mode=d.mode;this.gain=d.gain;this.gate=d.gate;this.env=0;this.gg=0;
+        if(d.mode==='overdub'){this.layer=new Float32Array(d.loopLen);this.loopLen=d.loopLen;this.wp=d.startPos;}
+        else{this.chunks=[];}
+      }else if(d.cmd==='stop'){
+        if(this.mode==='base'){let tot=0;for(const c of this.chunks)tot+=c.length;
+          const b=new Float32Array(tot);let o=0;for(const c of this.chunks){b.set(c,o);o+=c.length;}
+          this.chunks=[];this.mode='idle';this.port.postMessage({type:'base',buffer:b},[b.buffer]);
+        }else if(this.mode==='overdub'){const b=this.layer;this.layer=null;this.mode='idle';
+          this.port.postMessage({type:'overdub',buffer:b},[b.buffer]);
+        }else{this.port.postMessage({type:'base',buffer:new Float32Array(0)});}
+      }else if(d.cmd==='gain'){this.gain=d.gain;}
+      else if(d.cmd==='gate'){this.gate=d.gate;}
+    };
+  }
+  process(inputs){
+    const inp=inputs[0];
+    if(this.mode==='idle'||!inp||!inp[0])return true;
+    const ch=inp[0],n=ch.length,g=this.gain,gate=this.gate;
+    let env=this.env,gg=this.gg;const thr=0.003,aE=0.4,rE=0.008,aG=0.3,rG=0.02;
+    if(this.mode==='base'){const out=new Float32Array(n);
+      for(let i=0;i<n;i++){const raw=ch[i],a=raw<0?-raw:raw;let s=raw*g;
+        if(gate){env+=(a>env?aE:rE)*(a-env);const t=env>thr?1:0;gg+=(t>gg?aG:rG)*(t-gg);s*=gg;}
+        out[i]=Math.tanh(s);}
+      this.chunks.push(out);
+    }else{const layer=this.layer,L=this.loopLen;let wp=this.wp;
+      for(let i=0;i<n;i++){const raw=ch[i],a=raw<0?-raw:raw;let s=raw*g;
+        if(gate){env+=(a>env?aE:rE)*(a-env);const t=env>thr?1:0;gg+=(t>gg?aG:rG)*(t-gg);s*=gg;}
+        s=Math.tanh(s);layer[wp]=Math.tanh(layer[wp]+s);wp++;if(wp>=L)wp=0;}
+      this.wp=wp;
+    }
+    this.env=env;this.gg=gg;return true;
+  }
+}
+registerProcessor('rec-processor',RecProcessor);
+`;
 async function lpEnsureCtx(){
   if(_LP.ctx&&_LP.ctx.state!=='closed'){
     if(_LP.ctx.state==='suspended'){try{await _LP.ctx.resume();}catch(e){}}
@@ -3124,6 +3169,14 @@ async function lpEnsureCtx(){
     if(ctx.state==='suspended'){try{await ctx.resume();}catch(e){}}
     _LP.ctx=ctx; _LP.sr=ctx.sampleRate;
     _LP.master=ctx.createGain(); _LP.master.gain.value=1; _LP.master.connect(ctx.destination);
+    _LP.workletLoaded=false;
+    if(ctx.audioWorklet){
+      try{
+        if(!_LP.workletUrl)_LP.workletUrl=URL.createObjectURL(new Blob([_LP_WORKLET_SRC],{type:'application/javascript'}));
+        await ctx.audioWorklet.addModule(_LP.workletUrl);
+        _LP.workletLoaded=true;
+      }catch(e){_LP.workletLoaded=false;}   // cai no ScriptProcessor
+    }
     return true;
   }catch(e){alert('Áudio não disponível neste navegador.');return false;}
 }
@@ -3139,13 +3192,27 @@ async function lpAcquireMic(){
   _LP.micSrc=ctx.createMediaStreamSource(_LP.stream);
   _LP.analyser=ctx.createAnalyser(); _LP.analyser.fftSize=2048; _LP.analyser.smoothingTimeConstant=0.7;
   _LP.micSrc.connect(_LP.analyser);
+  if(_LP.workletLoaded){
+    try{
+      _LP.recNode=new AudioWorkletNode(ctx,'rec-processor',{numberOfInputs:1,numberOfOutputs:1,outputChannelCount:[1]});
+      _LP.recNode.port.onmessage=e=>{
+        const d=e.data;
+        if((d.type==='base'||d.type==='overdub')&&_LP.recResolve){const r=_LP.recResolve;_LP.recResolve=null;r(d.buffer);}
+      };
+      _LP.recSink=ctx.createGain();_LP.recSink.gain.value=0;
+      _LP.micSrc.connect(_LP.recNode);_LP.recNode.connect(_LP.recSink);_LP.recSink.connect(ctx.destination);
+    }catch(e){_LP.recNode=null;_LP.workletLoaded=false;}
+  }
   _LP.monOn=true; _lpMonLoop();
   return true;
 }
 function lpReleaseMic(){
   _LP.monOn=false;
   if(_LP.monRaf){cancelAnimationFrame(_LP.monRaf);_LP.monRaf=null;}
+  if(_LP.recResolve){const r=_LP.recResolve;_LP.recResolve=null;r(new Float32Array(0));}
   if(_LP.recProc)_lpStopRecNodes();
+  if(_LP.recNode){try{_LP.recNode.port.onmessage=null;}catch(e){}try{_LP.recNode.disconnect();}catch(e){}_LP.recNode=null;}
+  if(_LP.recSink){try{_LP.recSink.disconnect();}catch(e){}_LP.recSink=null;}
   if(_LP.micSrc){try{_LP.micSrc.disconnect();}catch(e){}_LP.micSrc=null;}
   if(_LP.stream){_LP.stream.getTracks().forEach(t=>t.stop());_LP.stream=null;}
   _LP.analyser=null;
@@ -3176,15 +3243,22 @@ function _lpStopMon(){
 /* ---- gravação (base e camadas) ---- */
 function _lpStartRec(isBase){
   const ctx=_LP.ctx;
-  _LP.env=0;_LP.gg=0;_LP.recBase=isBase;
-  if(isBase){_LP.recChunks=[];}
-  else{
-    _LP.recLayer=new Float32Array(_LP.loopLen);
+  _LP.recBase=isBase;
+  let startPos=0;
+  if(!isBase){
     const phase=((ctx.currentTime-_LP.startTime)%_LP.loopDur+_LP.loopDur)%_LP.loopDur;
     let sp=Math.round(phase*_LP.sr)-Math.round(_LP.sync*_LP.sr);
     sp%=_LP.loopLen; if(sp<0)sp+=_LP.loopLen;
-    _LP.recWritePos=sp;
+    startPos=sp;
   }
+  if(_LP.recNode){   // caminho AudioWorklet (preferido — sem craquelado)
+    _LP.recNode.port.postMessage({cmd:'start',mode:isBase?'base':'overdub',gain:_LP.gain,gate:_LP.gate,loopLen:_LP.loopLen,startPos});
+    return;
+  }
+  // fallback: ScriptProcessor
+  _LP.env=0;_LP.gg=0;
+  if(isBase){_LP.recChunks=[];}
+  else{_LP.recLayer=new Float32Array(_LP.loopLen);_LP.recWritePos=startPos;}
   _LP.recSrc=ctx.createMediaStreamSource(_LP.stream);
   _LP.recProc=ctx.createScriptProcessor(4096,1,1);
   _LP.recProc.onaudioprocess=e=>{
@@ -3196,15 +3270,13 @@ function _lpStartRec(isBase){
       const out=new Float32Array(n);
       for(let i=0;i<n;i++){const raw=inp[i],a=raw<0?-raw:raw;let s=raw*g;
         if(gate){env+=(a>env?aE:rE)*(a-env);const tgt=env>thr?1:0;gg+=(tgt>gg?aG:rG)*(tgt-gg);s*=gg;}
-        out[i]=Math.tanh(s);}   // soft-clip: arredonda picos sem estourar
+        out[i]=Math.tanh(s);}
       _LP.recChunks.push(out);
     }else{
       const layer=_LP.recLayer,L=_LP.loopLen;let wp=_LP.recWritePos;
       for(let i=0;i<n;i++){const raw=inp[i],a=raw<0?-raw:raw;let s=raw*g;
         if(gate){env+=(a>env?aE:rE)*(a-env);const tgt=env>thr?1:0;gg+=(tgt>gg?aG:rG)*(tgt-gg);s*=gg;}
-        s=Math.tanh(s);
-        layer[wp]=Math.tanh(layer[wp]+s);
-        wp++;if(wp>=L)wp=0;}
+        s=Math.tanh(s);layer[wp]=Math.tanh(layer[wp]+s);wp++;if(wp>=L)wp=0;}
       _LP.recWritePos=wp;
     }
     _LP.env=env;_LP.gg=gg;
@@ -3212,10 +3284,29 @@ function _lpStartRec(isBase){
   _LP.recSink=ctx.createGain();_LP.recSink.gain.value=0;
   _LP.recSrc.connect(_LP.recProc);_LP.recProc.connect(_LP.recSink);_LP.recSink.connect(ctx.destination);
 }
+function _lpStopRec(){   // devolve Promise<Float32Array> com o áudio gravado
+  return new Promise(res=>{
+    if(_LP.recNode){
+      let done=false;
+      _LP.recResolve=b=>{if(done)return;done=true;res(b||new Float32Array(0));};
+      _LP.recNode.port.postMessage({cmd:'stop'});
+      setTimeout(()=>{if(!done&&_LP.recResolve){_LP.recResolve=null;done=true;res(new Float32Array(0));}},1500);
+      return;
+    }
+    // fallback ScriptProcessor
+    let buf;
+    if(_LP.recBase){
+      const chunks=_LP.recChunks||[];_LP.recChunks=null;
+      let tot=0;for(const c of chunks)tot+=c.length;
+      buf=new Float32Array(tot);let o=0;for(const c of chunks){buf.set(c,o);o+=c.length;}
+    }else{buf=_LP.recLayer||new Float32Array(0);_LP.recLayer=null;}
+    _lpStopRecNodes();
+    res(buf);
+  });
+}
 function _lpStopRecNodes(){
   if(_LP.recProc){try{_LP.recProc.disconnect();}catch(e){}_LP.recProc.onaudioprocess=null;_LP.recProc=null;}
   if(_LP.recSrc){try{_LP.recSrc.disconnect();}catch(e){}_LP.recSrc=null;}
-  if(_LP.recSink){try{_LP.recSink.disconnect();}catch(e){}_LP.recSink=null;}
 }
 
 /* ---- objeto de camada + reprodução ---- */
@@ -3244,6 +3335,7 @@ function lpPlayAll(){
 
 /* ---- botão grande / máquina de estados ---- */
 async function lpBig(){
+  if(_LP.recResolve)return;   // já tem um "stop" em andamento; evita toque duplo
   const S=_LP.state;
   if(S==='idle'){
     if(!await lpAcquireMic())return;
@@ -3251,14 +3343,14 @@ async function lpBig(){
     document.getElementById('lpMeterLbl').textContent='● gravando base…';
     _lpSetBig();_lpClock();
   }else if(S==='recbase'){
-    _lpCloseBase();
+    await _lpCloseBase();
   }else if(S==='playing'){
     if(!await lpAcquireMic())return;
     document.getElementById('lpMeterLbl').textContent='● sobrepondo camada…';
     _LP.state='overdub';_lpStartRec(false);
     _lpSetBig();
   }else if(S==='overdub'){
-    _lpCloseOverdub();
+    await _lpCloseOverdub();
   }else if(S==='stopped'){
     if(!await lpEnsureCtx())return;
     lpPlayAll();_LP.state='playing';_lpSetBig();
@@ -3275,13 +3367,11 @@ function _lpTrimHead(buf,sr){
   if(start<Math.round(sr*0.03))return buf;  // pouco silêncio: nem vale cortar
   return buf.slice(start);
 }
-function _lpCloseBase(){
-  const chunks=_LP.recChunks;_LP.recChunks=null;
+async function _lpCloseBase(){
+  const base0=await _lpStopRec();   // buffer já com ganho/gate/soft-clip (worklet ou fallback)
   lpReleaseMic();   // libera o mic ANTES de tocar → saída volta ao alto-falante
-  let total=0;for(const c of chunks)total+=c.length;
-  if(total<_LP.sr*0.25){_LP.state='idle';_lpSetBig();_lpToast('Muito curto — tente de novo');return;}
-  let base=new Float32Array(total);let off=0;for(const c of chunks){base.set(c,off);off+=c.length;}
-  base=_lpTrimHead(base,_LP.sr);            // remove o vão inicial → loop reinicia certinho
+  if(base0.length<_LP.sr*0.25){_LP.state='idle';_lpSetBig();_lpToast('Muito curto — tente de novo');return;}
+  const base=_lpTrimHead(base0,_LP.sr);     // remove o vão inicial → loop reinicia certinho
   _LP.loopLen=base.length;_LP.loopDur=base.length/_LP.sr;
   _LP.tracks=[];_LP.redo=[];_LP.sessId=null;_LP.sessNome='';
   _LP.startTime=_LP.ctx.currentTime;
@@ -3290,21 +3380,21 @@ function _lpCloseBase(){
   _LP.state='playing';_lpSetBig();_lpClock();_lpRenderLayers();
   document.getElementById('lpMeterLbl').textContent='tocando 🔊';
 }
-function _lpCloseOverdub(){
-  const layer=_LP.recLayer;_LP.recLayer=null;
+async function _lpCloseOverdub(){
+  const layer=await _lpStopRec();
   lpReleaseMic();   // libera o mic → reprodução volta ao alto-falante estéreo
   _LP.state='playing';
   document.getElementById('lpMeterLbl').textContent='tocando 🔊';
   let peak=0;for(let i=0;i<layer.length;i++){const a=Math.abs(layer[i]);if(a>peak)peak=a;}
-  if(peak<0.003){_lpSetBig();_lpToast('Camada vazia — descartada');return;}
+  if(peak<0.003||layer.length<_LP.loopLen){_lpSetBig();if(peak<0.003)_lpToast('Camada vazia — descartada');return;}
   const t=_lpTrackObj(layer,'Camada '+_LP.tracks.length);
   _LP.tracks.push(t);_LP.redo=[];_lpStartTrackSrc(t);
   _lpSetBig();_lpRenderLayers();
 }
 
 /* ---- transporte ---- */
-function lpTogglePlay(){
-  if(_LP.state==='overdub')_lpCloseOverdub();
+async function lpTogglePlay(){
+  if(_LP.state==='overdub')await _lpCloseOverdub();
   if(!_LP.tracks.length)return;
   if(_LP.state==='playing'){lpStopAllSrc();_LP.state='stopped';
     const ml=document.getElementById('lpMeterLbl');if(ml)ml.textContent='parado';}
@@ -3331,7 +3421,7 @@ function lpRedo(){
 function lpLimpar(){
   if(!_LP.tracks.length&&_LP.state==='idle')return;
   if(!confirm('Limpar tudo e recomeçar do zero?'))return;
-  if(_LP.state==='overdub'||_LP.state==='recbase')_lpStopRecNodes();
+  if(_LP.state==='overdub'||_LP.state==='recbase')lpReleaseMic();   // aborta gravação em andamento
   lpStopAllSrc();
   _LP.tracks=[];_LP.redo=[];_LP.loopLen=0;_LP.loopDur=0;
   _LP.state='idle';_LP.sessId=null;_LP.sessNome='';
@@ -3731,9 +3821,8 @@ function abrirLooper(){
   _lpSetBig();_lpRenderLayers();_lpRenderSalvas();
 }
 function voltarDoLooper(){
-  if(_LP.state==='overdub')_lpCloseOverdub();
-  if(_LP.state==='recbase'){_lpStopRecNodes();_LP.state='idle';}
-  if(_LP.state==='playing')_LP.state='stopped';
+  if(_LP.state==='overdub'||_LP.state==='recbase')_LP.state='stopped';   // aborta gravação; _lpStopMon libera tudo
+  else if(_LP.state==='playing')_LP.state='stopped';
   _lpStopMon();
   document.getElementById('looper').style.display='none';
   document.getElementById('lista').style.display='block';
